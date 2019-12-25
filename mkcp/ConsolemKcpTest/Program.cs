@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -7,145 +8,21 @@ namespace ConsolemKcpTest {
     /// <summary>
     /// 3字节int
     /// </summary>
-    public struct Int24 {
+    [StructLayout(LayoutKind.Sequential,Pack =1)]
+    public struct TestS {
         public byte B1;
         public byte B2;
         public byte B3;
-    }
-    /// <summary>
-    /// 3字节int 最大1671万
-    /// </summary>
-    [StructLayout(LayoutKind.Sequential, Pack = 1)]
-    public struct UInt24 {
-        public byte B1;
-        public byte B2;
-        public byte B3;
-        public unsafe static implicit operator uint(UInt24 u24) => (uint)(u24.B1 << 16 | u24.B2 << 8 | u24.B3);
-        public unsafe static explicit operator UInt24(uint u32) => ((Box4ByteUInt24*)&u32)->UInt24;
-
-        public static UInt24
-            MaxValue = (UInt24)16_711_425,
-            MinValue = (UInt24)0;
-
-        [StructLayout(LayoutKind.Sequential, Pack = 1)]
-        internal struct Box4ByteUInt24 {
-            public byte NUse;
-            public UInt24 UInt24;
-        }
-    }
-
-    struct MkcpAck {
-
-        /// <summary>
-        /// 支持6w个连接(底层使用Queue队列复用)
-        /// </summary>
-        public ushort Conv;  //连接标识(服务端这里大概需要使用IP地址+Conv配合 做成唯一连接ID，从而防止客户端端口变化)
-        public byte CMD_OPT;
-        /// <summary>
-        /// 0-5 低三位
-        /// </summary>
-        public byte Cmd { get { return (byte)(CMD_OPT << 5 >> 3); } }
-        /// <summary>
-        /// 高5位
-        /// </summary>
-        public byte Opt { get { return (byte)(CMD_OPT >> 3); } }
-        /// <summary>
-        /// 窗口
-        /// </summary>
-        public uint Wnd;
-
-        /// <summary>
-        /// 用于代替时间戳，本次发包距离上一次发包过去了多久。
-        /// 最大值有效值为ushort.Max（代表大于），最大为ushort.Max（代表大于130.05秒）
-        /// 每1点为2毫秒(ushort.Max*2=?ms 最长为130.05秒)
-        /// </summary>
-        public ushort TimeInterval;
-        /// <summary>
-        /// 包序号
-        /// </summary>
-        public UInt24 SN;
-        /// <summary>
-        ///（相对距离）未确认序列号rUna(接收端 UNA=SN-rUna) : 远端主机正在发送的，且尚未收到确认的最小的Sn的距离
-        /// </summary>
-        public ushort rUna;
-        /// <summary>
-        /// 数据长度
-        /// </summary>
-        public ushort Len;
-    }
-
-    /// <summary>
-    /// 客户端发给服务端（间隔10秒以内）
-    /// </summary>
-    [StructLayout(LayoutKind.Sequential, Pack = 1)]
-    struct MkcpHeart {
-        /// <summary>
-        /// 支持6w个连接(底层使用Queue队列复用)
-        /// </summary>
-        public ushort Conv;  //连接标识(服务端这里大概需要使用IP地址+Conv配合 做成唯一连接ID，从而防止客户端端口变化)
-        public byte CMD_OPT;
-        /// <summary>
-        /// 0-5 低三位
-        /// </summary>
-        public byte Cmd { get { return (byte)(CMD_OPT << 5 >> 3); } }
-        /// <summary>
-        /// 高5位
-        /// </summary>
-        public byte Opt { get { return (byte)(CMD_OPT >> 3); } }
-        /// <summary>
-        /// 下一接收序列号 Sn: 同确认片段的 Sn
-        /// </summary>
-        public UInt24 SN;
-        /// <summary>
-        ///（相对距离）未确认序列号rUna(接收端 UNA=SN-rUna) : 远端主机正在发送的，且尚未收到确认的最小的Sn的距离
-        /// </summary>
-        public ushort rUna;
-        /// <summary>
-        /// 延迟 Rto: 远端主机自己计算出的延迟
-        /// </summary>
-        public ushort Rto;
-    }
-
-    [StructLayout(LayoutKind.Sequential, Pack = 1)]
-    struct MkcpSegmentOfData {
-        /// <summary>
-        /// 支持6w个连接(底层使用Queue队列复用)
-        /// </summary>
-        public ushort Conv;  //连接标识(服务端这里大概需要使用IP地址+Conv配合 做成唯一连接ID，从而防止客户端端口变化)
-        public byte CMD_OPT;
-        /// <summary>
-        /// 0-5 低三位
-        /// </summary>
-        public byte Cmd { get { return (byte)(CMD_OPT << 5 >> 3); } }
-        /// <summary>
-        /// 高5位
-        /// </summary>
-        public byte Opt { get { return (byte)(CMD_OPT >> 3); } }
-        /// <summary>
-        /// 用于代替时间戳，本次发包距离上一次发包过去了多久。
-        /// 最大值有效值为ushort.Max（代表大于），最大为ushort.Max（代表大于130.05秒）
-        /// 每1点为2毫秒(ushort.Max*2=?ms 最长为130.05秒)
-        /// </summary>
-        public ushort TimeInterval;
-        /// <summary>
-        /// 包序号
-        /// </summary>
-        public UInt24 SN;
-        /// <summary>
-        ///（相对距离）未确认序列号rUna(接收端 UNA=SN-rUna) : 远端主机正在发送的，且尚未收到确认的最小的Sn的距离
-        /// </summary>
-        public ushort rUna;
-        /// <summary>
-        /// 数据长度
-        /// </summary>
-        public ushort Len;
     }
 
     class Program {
         static void Main(string[] args) {
-            unsafe {
+            Dictionary<int, int> keys = new Dictionary<int, int>();
 
-                Console.WriteLine(sizeof(MkcpSegmentOfData));
+                TestS testS = new TestS { B1 = 1, B2 = 2, B3 = 3 };
+            unsafe {
+                testS.B2 = 5;
+                Console.WriteLine(testS.B3);
             }
 
             Console.WriteLine("Hello World!");

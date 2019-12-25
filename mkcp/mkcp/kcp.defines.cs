@@ -2,8 +2,7 @@
 using System.Runtime.CompilerServices;
 
 namespace mkcp {
-    public class kcp {
-
+    public partial class kcp {
         public const int IKCP_RTO_NDL = 30;         // no delay min rto
         public const int IKCP_RTO_MIN = 100;        // normal min rto
         public const int IKCP_RTO_DEF = 200;
@@ -38,47 +37,6 @@ namespace mkcp {
         public const int IKCP_LOG_OUT_ACK = 0x200;
         public const int IKCP_LOG_OUT_PROBE = 0x400;
         public const int IKCP_LOG_OUT_WINS = 0x800;
-
-
-        // encode 8 bits unsigned int
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void ikcp_encode8u(byte[] p, int offset, byte c) {
-            p[offset] = c;
-        }
-
-        // decode 8 bits unsigned int
-        public static byte ikcp_decode8u(byte[] p, ref int offset) {
-            return p[offset++];
-        }
-
-        // encode 16 bits unsigned int (lsb)
-        public static void ikcp_encode16u(byte[] p, int offset, UInt16 v) {
-            p[offset] = (byte)(v & 0xFF);
-            p[offset + 1] = (byte)(v >> 8);
-        }
-
-        // decode 16 bits unsigned int (lsb)
-        public static UInt16 ikcp_decode16u(byte[] p, ref int offset) {
-            int pos = offset;
-            offset += 2;
-            return (UInt16)((UInt16)p[pos] | (UInt16)(p[pos + 1] << 8));
-        }
-
-        // encode 32 bits unsigned int (lsb)
-        public static void ikcp_encode32u(byte[] p, int offset, UInt32 l) {
-            p[offset] = (byte)(l & 0xFF);
-            p[offset + 1] = (byte)(l >> 8);
-            p[offset + 2] = (byte)(l >> 16);
-            p[offset + 3] = (byte)(l >> 24);
-        }
-
-        // decode 32 bits unsigned int (lsb)
-        public static UInt32 ikcp_decode32u(byte[] p, ref int offset) {
-            int pos = offset;
-            offset += 4;
-            return ((UInt32)p[pos] | (UInt32)(p[pos + 1] << 8)
-                | (UInt32)(p[pos + 2] << 16) | (UInt32)(p[pos + 3] << 24));
-        }
 
         public static UInt32 _imin_(UInt32 a, UInt32 b) {
             return a <= b ? a : b;

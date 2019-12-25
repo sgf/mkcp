@@ -5,7 +5,9 @@ VisualStudioVersion = 16.0.29613.14
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "mkcp", "mkcp\mkcp.csproj", "{2C66F72F-E363-45C7-BE99-578E58377F51}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConsolemKcpTest", "ConsolemKcpTest\ConsolemKcpTest.csproj", "{3C9CD4CD-B6F0-4206-B9F4-2809A964EE81}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ConsolemKcpTest", "ConsolemKcpTest\ConsolemKcpTest.csproj", "{3C9CD4CD-B6F0-4206-B9F4-2809A964EE81}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "mkcp.xTest", "mkcp.xTest\mkcp.xTest.csproj", "{3305098F-04F6-4F4C-8A5B-4A163D6EC6A0}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -21,6 +23,10 @@ Global
 		{3C9CD4CD-B6F0-4206-B9F4-2809A964EE81}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3C9CD4CD-B6F0-4206-B9F4-2809A964EE81}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3C9CD4CD-B6F0-4206-B9F4-2809A964EE81}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3305098F-04F6-4F4C-8A5B-4A163D6EC6A0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3305098F-04F6-4F4C-8A5B-4A163D6EC6A0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3305098F-04F6-4F4C-8A5B-4A163D6EC6A0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3305098F-04F6-4F4C-8A5B-4A163D6EC6A0}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
