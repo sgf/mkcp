@@ -1,4 +1,6 @@
-﻿namespace mkcp {
+﻿using System.Runtime.InteropServices;
+
+namespace mkcp {
 
 
     /// <summary>
@@ -16,19 +18,25 @@
         public byte B3;
     }
 
-    struct mkcpSegmentOfData {
-        public Int24 Conv;  //标识(为了支持更多的客户端进行连接,这里采用3个字节)
+
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+    struct MkcpSegmentOfData {
+        public ushort Conv;  //连接标识  (为了支持更多的客户端进行连接,这里采用3个字节)
         public byte CMD_OPT;
         /// <summary>
-        /// 0-5
+        /// 0-5 低三位
         /// </summary>
         public byte Cmd { get { return (byte)(CMD_OPT << 5 >> 3); } }
-        public byte Opt;//5位
         /// <summary>
-        /// 最大值有效值为254（代表大于），最大为255（代表大于12.7秒）
-        /// 每1点为50毫秒(254*50=12700ms 最长为12.7秒)
+        /// 高5位
         /// </summary>
-        public byte TimeInterval;
+        public byte Opt { get { return (byte)(CMD_OPT >> 3); } }
+        /// <summary>
+        /// 用于代替时间戳，本次发包距离上一次发包过去了多久。
+        /// 最大值有效值为ushort.Max（代表大于），最大为ushort.Max（代表大于130.05秒）
+        /// 每1点为2毫秒(ushort.Max*2=?ms 最长为130.05秒)
+        /// </summary>
+        public ushort TimeInterval;
         /// <summary>
         /// 包序号
         /// </summary>
@@ -41,9 +49,9 @@
         /// <summary>
         /// 数据长度
         /// </summary>
-        public uint Len;
-
+        public UInt24 Len;
     }
+
 
 
 
