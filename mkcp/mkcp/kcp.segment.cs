@@ -1,8 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Text;
 
 [assembly: InternalsVisibleTo("mkcp.xTest")]
 namespace mkcp {
@@ -34,9 +32,15 @@ namespace mkcp {
 
             internal UInt32 resendts = 0;
             internal UInt32 rto = 0;
+            /// <summary>
+            /// 快速Ack
+            /// </summary>
             internal UInt32 faskack = 0;
+            /// <summary>
+            /// 最大重传次数
+            /// </summary>
             internal UInt32 xmit = 0;
-            internal byte[] data;
+            internal byte[] data { get; set; }
 
             internal Segment(int size = 0) {
                 data = new byte[size];
@@ -49,12 +53,14 @@ namespace mkcp {
                 offset += IKCP_OVERHEAD;
             }
 
-            internal unsafe static ref SegmentHead Decode(byte[] ptr, ref int offset) {
-                offset += IKCP_OVERHEAD;
-                return ref MemoryMarshal.AsRef<SegmentHead>(ptr.AsSpan());
-            }
-
         }
+
+
+    }
+    internal static class SpanEx {
+        public static ref T Read<T>(this Span<byte> buff) where T : struct => ref MemoryMarshal.AsRef<T>(buff);
+        public static ref T Read<T>(this Span<byte> buff, int offset) where T : struct => ref MemoryMarshal.AsRef<T>(buff.Slice(offset));
+
     }
 
 }

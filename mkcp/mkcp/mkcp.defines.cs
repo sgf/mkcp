@@ -22,7 +22,7 @@ namespace mkcp {
         public unsafe static implicit operator uint(UInt24 u24) => (uint)(u24.B1 << 16 | u24.B2 << 8 | u24.B3);
         public unsafe static explicit operator UInt24(uint u32) => ((Box4ByteUInt24*)&u32)->UInt24;
 
-        public static UInt24
+        public static readonly UInt24
             MaxValue = (UInt24)16_711_425,
             MinValue = (UInt24)0;
 
@@ -52,7 +52,6 @@ namespace mkcp {
         /// 窗口
         /// </summary>
         public uint Wnd;
-
         /// <summary>
         /// 用于代替时间戳，本次发包距离上一次发包过去了多久。
         /// 最大值有效值为ushort.Max（代表大于），最大为ushort.Max（代表大于130.05秒）
