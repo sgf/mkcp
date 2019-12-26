@@ -2,7 +2,7 @@
 using System.Diagnostics;
 
 namespace mkcp {
-    public partial class kcp {
+    public partial class Kcp {
 
 
         // user/upper level send, returns below zero for error

@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 [assembly: InternalsVisibleTo("mkcp.xTest")]
 namespace mkcp {
 
-    public partial class kcp {
+    public partial class Kcp {
 
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
         internal struct SegmentHead {

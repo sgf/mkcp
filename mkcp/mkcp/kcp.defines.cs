@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 
 namespace mkcp {
-    public partial class kcp {
+    public partial class Kcp {
         public const int IKCP_RTO_NDL = 30;         // no delay min rto
         public const int IKCP_RTO_MIN = 100;        // normal min rto
         public const int IKCP_RTO_DEF = 200;

@@ -1,6 +1,6 @@
 ﻿using System;
 using Xunit;
-using static mkcp.kcp;
+using static mkcp.Kcp;
 
 namespace mkcp.xTest {
     public class SegmentTest {

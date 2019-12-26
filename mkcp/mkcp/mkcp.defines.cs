@@ -51,7 +51,7 @@ namespace mkcp {
         /// <summary>
         /// 窗口
         /// </summary>
-        public uint Wnd;
+        public ushort Wnd;
         /// <summary>
         /// 用于代替时间戳，本次发包距离上一次发包过去了多久。
         /// 最大值有效值为ushort.Max（代表大于），最大为ushort.Max（代表大于130.05秒）
@@ -134,7 +134,7 @@ namespace mkcp {
         /// </summary>
         public ushort rUna;
         /// <summary>
-        /// 数据长度
+        /// 数据长度（可以省略掉 直接通过UDP的包长计算）
         /// </summary>
         public ushort Len;
     }

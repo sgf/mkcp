@@ -3,12 +3,12 @@ using System.Collections.Generic;
 using System.Diagnostics;
 
 namespace mkcp {
-    public partial class kcp {
+    public partial class Kcp {
 
         // create a new kcp control object, 'conv' must equal in two endpoint
         // from the same connection. 'user' will be passed to the output callback
         // output callback can be setup like this: 'kcp->output = my_udp_output'
-        public kcp(UInt32 conv, object user) {
+        public Kcp(UInt32 conv, object user) {
             Debug.Assert(BitConverter.IsLittleEndian); // we only support little endian device
 
             user_ = user;
