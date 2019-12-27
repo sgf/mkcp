@@ -11,7 +11,8 @@ namespace mkcp {
         private readonly Dictionary<uint, KcpSession> Clients = new Dictionary<uint, KcpSession>();
         private readonly HashSet<EndPoint> BadList = new HashSet<EndPoint>(100);
         private readonly Queue<uint> SIDPool;
-        private void GenerateSIDS(int maxUser = 1000) {
+      
+        private void PreGenerateSIDS(int maxUser = 1000) {
             Random random = new Random();
             List<uint> numrangs = new List<uint>(maxUser);
             for (uint i = 1; i <= maxUser; i++)
@@ -25,10 +26,10 @@ namespace mkcp {
 
         public KcpSessionManager(int maxUser = 1000) {
             SIDPool = new Queue<uint>(maxUser);
-            GenerateSIDS(maxUser);
+            PreGenerateSIDS(maxUser);
         }
 
-        public (bool, KcpSession) DetermineBadOrNewConnection(Span<byte> pk, IPEndPoint endPoint) {
+        public (bool isBad, KcpSession session) DetermineIsBadOrNewConnection(Span<byte> pk, IPEndPoint endPoint) {
             if (BadList.Contains(endPoint)) return (true, null);//已经被拉黑
 
             if (pk.Length < Kcp.IKCP_OVERHEAD) { //包数据太小

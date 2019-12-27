@@ -4,7 +4,6 @@ using System.Diagnostics;
 namespace mkcp {
     public partial class Kcp {
 
-
         // user/upper level send, returns below zero for error
         public int Send(byte[] buffer, int offset, int len) {
             Debug.Assert(mss > 0);

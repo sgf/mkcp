@@ -34,7 +34,6 @@ namespace mkcp {
     }
 
     public struct MkcpAck {
-
         /// <summary>
         /// 支持6w个连接(底层使用Queue队列复用)
         /// </summary>
@@ -49,7 +48,7 @@ namespace mkcp {
         /// </summary>
         public byte Opt { get { return (byte)(CMD_OPT >> 3); } }
         /// <summary>
-        /// 窗口
+        /// 窗口（大概可以变成byte类型，窗口的单元大概可以以 包长度计算，这个具体还要多学习）
         /// </summary>
         public ushort Wnd;
         /// <summary>
@@ -120,12 +119,6 @@ namespace mkcp {
         /// </summary>
         public byte Opt { get { return (byte)(CMD_OPT >> 3); } }
         /// <summary>
-        /// 用于代替时间戳，本次发包距离上一次发包过去了多久。
-        /// 最大值有效值为ushort.Max（代表大于），最大为ushort.Max（代表大于130.05秒）
-        /// 每1点为2毫秒(ushort.Max*2=?ms 最长为130.05秒)
-        /// </summary>
-        public ushort TimeInterval;
-        /// <summary>
         /// 包序号
         /// </summary>
         public UInt24 SN;
@@ -133,10 +126,19 @@ namespace mkcp {
         ///（相对距离）未确认序列号rUna(接收端 UNA=SN-rUna) : 远端主机正在发送的，且尚未收到确认的最小的Sn的距离
         /// </summary>
         public ushort rUna;
+
+
+
+        /// <summary>
+        /// 用于代替时间戳，本次发包距离上一次发包过去了多久。
+        /// 最大值有效值为ushort.Max（代表大于），最大为ushort.Max（代表大于130.05秒）
+        /// 每1点为2毫秒(ushort.Max*2=?ms 最长为130.05秒)
+        /// </summary>
+        //public ushort TimeInterval;（可以通过Ack返回时间计算rtt）
         /// <summary>
         /// 数据长度（可以省略掉 直接通过UDP的包长计算）
         /// </summary>
-        public ushort Len;
+        //public ushort Len;
     }
 
 }
