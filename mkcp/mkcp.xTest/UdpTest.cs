@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -38,7 +36,7 @@ namespace mkcp.xTest {
                 Task.Delay(2000);
                 var buff = new byte[8192];
                 var endport = new IPEndPoint(IPAddress.Any, 0);
-                var rlt = await svr.ReceiveFromAsync(new ArraySegment<byte>(buff), SocketFlags.None, endport);
+                var rlt = await svr.ReceiveMessageFromAsync(new ArraySegment<byte>(buff), SocketFlags.None, endport);
                 Output.WriteLine($"{rlt.ReceivedBytes },{rlt.RemoteEndPoint}");
             }
         }
@@ -48,7 +46,7 @@ namespace mkcp.xTest {
             var clid = clident++;
             while (true) {
                 Task.Delay(2000);
-                var nbuff =  Encoding.Default.GetBytes($"Msg From:{clid},Time{DateTimeOffset.Now}");
+                var nbuff = Encoding.Default.GetBytes($"Msg From:{clid},Time{DateTimeOffset.Now}");
                 cl.SendToAsync(new ArraySegment<byte>(nbuff), SocketFlags.None, svrEndPort);
                 Output.WriteLine($"客户端{clid}消息发送");
             }

@@ -1,17 +1,25 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Net;
-using System.Text;
 
 namespace mkcp {
 
-    public class KcpSessionManager {
+
+    public delegate void NewSessionHandler(KcpSession session);
+
+
+
+    public interface IKcpIO {
+        void OnUdpReceive(Span<byte> data, IPEndPoint endPoint);
+    }
+
+    public class KcpSessionManager : IKcpIO {
         //private readonly ILogger? logger;
         private readonly Dictionary<uint, KcpSession> Clients = new Dictionary<uint, KcpSession>();
+        private readonly HashSet<EndPoint> ConList = new HashSet<EndPoint>(1000);
         private readonly HashSet<EndPoint> BadList = new HashSet<EndPoint>(100);
         private readonly Queue<uint> SIDPool;
-      
+
         private void PreGenerateSIDS(int maxUser = 1000) {
             Random random = new Random();
             List<uint> numrangs = new List<uint>(maxUser);
@@ -29,35 +37,48 @@ namespace mkcp {
             PreGenerateSIDS(maxUser);
         }
 
-        public (bool isBad, KcpSession session) DetermineIsBadOrNewConnection(Span<byte> pk, IPEndPoint endPoint) {
-            if (BadList.Contains(endPoint)) return (true, null);//已经被拉黑
+        public event NewSessionHandler OnNewSession;
 
-            if (pk.Length < Kcp.IKCP_OVERHEAD) { //包数据太小
-                //logger?.LogInformation($"Client:{kcpSession.IP} duplicate,cant Add to Session list!");
-                BadList.Add(endPoint);
-                return (true, null);
-            }
-            var dataSize = pk.Length - Kcp.IKCP_OVERHEAD;
-            ref var segHead = ref pk.Read<Kcp.SegmentHead>();
-            if (dataSize < segHead.len //Data数据太小
-               || segHead.cmd < Kcp.IKCP_CMD_PUSH || segHead.cmd > Kcp.IKCP_CMD_WINS) { //cmd命令不存在
-                //logger?.LogInformation($"Client:{kcpSession.IP} duplicate,cant Add to Session list!");
-                BadList.Add(endPoint);
-                return (true, null);
-            }
+        public void AddBad(IPEndPoint endPoint) => BadList.Add(endPoint);
+        public bool InBad(IPEndPoint endPoint) => BadList.Contains(endPoint);
 
-            if (Clients.TryGetValue(segHead.conv, out KcpSession existsSession) &&
-                (existsSession.Peer.Address != endPoint.Address
-                    || existsSession.Peer.Port != endPoint.Port)) { //暂时要求端口也必须一致
-                //logger?.LogInformation($"Client:{kcpSession.IP} duplicate,cant Add to Session list!");
-                BadList.Add(endPoint);
-                return (true, null);
-            }
+        public KcpSession DetermineIsBadOrNewConnection(uint conv, IPEndPoint endPoint) {
+            KcpSession session = null;
+            //2 包合法IP端口存在（老连接的数据） 这里还需要KCP底层继续校验 例如：SN号是否合法还应该考虑客户端如果IP没变但是端口变了（这个可能需要兼容）
+            //（这里暂时认为IP和端口号必须一致就OK，其他情况暂时认为都不合法）
+            if (conv == 0)
+                return CheckingNewOrOld(endPoint);
+            else if (Clients.TryGetValue(conv, out session)) {//因为conv是uint 因此这里默认隐含 conv>0
+                if (session.Peer == endPoint) //暂时要求端口也必须一致
+                    return session;
+                else {
+                    //logger?.LogInformation($"Client:{kcpSession.IP} duplicate,cant Add to Session list!");
+                    AddBad(endPoint);
+                    return null;
+                }
+            } else
+                return null;
+        }
 
+
+        private KcpSession AddNewSession(IPEndPoint endPoint) {
             var sid = SIDPool.Dequeue();
-            existsSession ??= new KcpSession(sid, endPoint, this);
-            Clients.Add(sid, existsSession);
-            return (false, existsSession);
+            var news = KcpSession.CreateSvrSeesion(sid, endPoint, this);
+            Clients.Add(sid, news);
+            ConList.Add(endPoint);
+            OnNewSession?.Invoke(news);
+            return news;
+        }
+
+        private KcpSession CheckingNewOrOld(IPEndPoint endPoint) {
+            //3 包合法IP端口不存在（检查ConV是否为0，为0为新连接，不为0拉黑）
+            if (!ConList.Contains(endPoint)) {
+                return AddNewSession(endPoint);
+            } else {//老客户端新连接（要T下线 或者协商 让对方更新连接ID，继续服务，这个得看客户端超时时间了 这个要不要做有没有风险有待商榷，比如客户端正在搞协议分析或者破解什么的）
+#warning 老客户端新连接（要T下线）
+
+                return null;
+            }
         }
 
         /// <summary>
@@ -71,11 +92,25 @@ namespace mkcp {
             }
         }
 
+        public void OnUdpReceive(Span<byte> data, IPEndPoint endPoint) {
+            //检查黑名单
+            if (this.InBad(endPoint)) return;
+            //检查格式
+            var (isBad, conv) = KcpSession.IsBadFormat(data);
+            if (isBad) { this.AddBad(endPoint); return; }
 
+            var session = this.DetermineIsBadOrNewConnection(conv, endPoint);
+            if (session == null) return;
+            KcpSession.KCPInput(session, data);
+        }
     }
 
 
+    public class KcpClient : IKcpIO {
 
+
+
+    }
 
 
 }

@@ -85,7 +85,7 @@ namespace mkcp {
         /// </summary>
         Int32 rx_srtt = 0;
         /// <summary>
-        /// 由ack接收延迟计算出来的重传超时时间
+        /// 由ack接收延迟计算出来的重传超时时间(rto=retransmission timeout)
         /// </summary>
         Int32 rx_rto = 0;
         /// <summary>

@@ -1,10 +1,8 @@
 ﻿using System;
 using System.Buffers;
-using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace mkcp {
@@ -34,8 +32,9 @@ namespace mkcp {
                 var rlt = await InnerSocket.ReceiveMessageFromAsync(mem.Memory.ToArray(), SocketFlags.None, new IPEndPoint(IPAddress.Any, 0));
                 if (rlt.ReceivedBytes > 0)
                     OnUdpReceive(mem.Memory.Span.Slice(0, rlt.ReceivedBytes), (IPEndPoint)rlt.RemoteEndPoint);
-                else
-                    break;
+                else {
+                    //Log......
+                }
             }
         }
 
