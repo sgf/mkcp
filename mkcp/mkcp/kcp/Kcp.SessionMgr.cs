@@ -6,17 +6,26 @@ namespace mkcp {
 
 
     public delegate void NewSessionHandler(KcpSession session);
+    public delegate void KickSessionHandler(KcpSession session);
 
-
+    public delegate void UdpSendHandler(Span<byte> data, IPEndPoint endPoint);
 
     public interface IKcpIO {
-        void OnUdpReceive(Span<byte> data, IPEndPoint endPoint);
+
+        UdpSendHandler RawSend { get; }
+
+        void OnRawReceive(Span<byte> data, IPEndPoint endPoint);
     }
 
-    public class KcpSessionManager : IKcpIO {
+    public interface IKcpEnd {
+        void KcpSend(KcpSession session, Span<byte> data);
+        void OnKcpReceive(KcpSession session, Span<byte> data);
+    }
+
+    public class KcpSessionManager {
         //private readonly ILogger? logger;
-        private readonly Dictionary<uint, KcpSession> Clients = new Dictionary<uint, KcpSession>();
-        private readonly HashSet<EndPoint> ConList = new HashSet<EndPoint>(1000);
+        private readonly Dictionary<uint, KcpSession> Sessions = new Dictionary<uint, KcpSession>();
+        private readonly Dictionary<EndPoint, KcpSession> ConList = new Dictionary<EndPoint, KcpSession>(1000);
         private readonly HashSet<EndPoint> BadList = new HashSet<EndPoint>(100);
         private readonly Queue<uint> SIDPool;
 
@@ -36,8 +45,10 @@ namespace mkcp {
             SIDPool = new Queue<uint>(maxUser);
             PreGenerateSIDS(maxUser);
         }
+        public NewSessionHandler OnNew;
+        public KickSessionHandler OnKick;
 
-        public event NewSessionHandler OnNewSession;
+        public UdpSendHandler RawSend { get; set; }
 
         public void AddBad(IPEndPoint endPoint) => BadList.Add(endPoint);
         public bool InBad(IPEndPoint endPoint) => BadList.Contains(endPoint);
@@ -48,7 +59,7 @@ namespace mkcp {
             //（这里暂时认为IP和端口号必须一致就OK，其他情况暂时认为都不合法）
             if (conv == 0)
                 return CheckingNewOrOld(endPoint);
-            else if (Clients.TryGetValue(conv, out session)) {//因为conv是uint 因此这里默认隐含 conv>0
+            else if (Sessions.TryGetValue(conv, out session)) {//因为conv是uint 因此这里默认隐含 conv>0
                 if (session.Peer == endPoint) //暂时要求端口也必须一致
                     return session;
                 else {
@@ -60,24 +71,23 @@ namespace mkcp {
                 return null;
         }
 
-
         private KcpSession AddNewSession(IPEndPoint endPoint) {
             var sid = SIDPool.Dequeue();
             var news = KcpSession.CreateSvrSeesion(sid, endPoint, this);
-            Clients.Add(sid, news);
-            ConList.Add(endPoint);
-            OnNewSession?.Invoke(news);
+            Sessions.Add(sid, news);
+            ConList.Add(endPoint, news);
+            OnNew?.Invoke(news);
             return news;
         }
 
         private KcpSession CheckingNewOrOld(IPEndPoint endPoint) {
             //3 包合法IP端口不存在（检查ConV是否为0，为0为新连接，不为0拉黑）
-            if (!ConList.Contains(endPoint)) {
+            if (!ConList.TryGetValue(endPoint, out KcpSession session)) {
                 return AddNewSession(endPoint);
             } else {//老客户端新连接（要T下线 或者协商 让对方更新连接ID，继续服务，这个得看客户端超时时间了 这个要不要做有没有风险有待商榷，比如客户端正在搞协议分析或者破解什么的）
 #warning 老客户端新连接（要T下线）
-
-                return null;
+                OnKick?.Invoke(session);
+                return session;
             }
         }
 
@@ -86,31 +96,16 @@ namespace mkcp {
         /// </summary>
         /// <param name="session2remove"></param>
         public void Remove(KcpSession session) {
-            if (Clients.ContainsKey(session.SID)) {
-                Clients.Remove(session.SID);
+            if (Sessions.ContainsKey(session.SID)) {
+                ConList.Remove(session.Peer);
+                Sessions.Remove(session.SID);
                 SIDPool.Enqueue(session.SID);
             }
         }
 
-        public void OnUdpReceive(Span<byte> data, IPEndPoint endPoint) {
-            //检查黑名单
-            if (this.InBad(endPoint)) return;
-            //检查格式
-            var (isBad, conv) = KcpSession.IsBadFormat(data);
-            if (isBad) { this.AddBad(endPoint); return; }
-
-            var session = this.DetermineIsBadOrNewConnection(conv, endPoint);
-            if (session == null) return;
-            KcpSession.KCPInput(session, data);
-        }
-    }
-
-
-    public class KcpClient : IKcpIO {
-
-
 
     }
+
 
 
 }

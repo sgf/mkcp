@@ -7,7 +7,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "mkcp", "mkcp\mkcp.csproj", 
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ConsolemKcpTest", "ConsolemKcpTest\ConsolemKcpTest.csproj", "{3C9CD4CD-B6F0-4206-B9F4-2809A964EE81}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "mkcp.xTest", "mkcp.xTest\mkcp.xTest.csproj", "{3305098F-04F6-4F4C-8A5B-4A163D6EC6A0}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "mkcp.xTest", "mkcp.xTest\mkcp.xTest.csproj", "{3305098F-04F6-4F4C-8A5B-4A163D6EC6A0}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{48E6F3A9-7283-4C02-B087-B42642DF9549}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

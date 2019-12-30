@@ -70,8 +70,11 @@ namespace mkcp {
         /// </summary>
         UInt32 rcv_nxt = 0;
 
+
+#pragma warning disable S1144 // Unused private types or members should be removed
         UInt32 ts_recent_ = 0;
         UInt32 ts_lastack_ = 0;
+#pragma warning restore S1144 // Unused private types or members should be removed
         /// <summary>
         /// 拥塞窗口阈值
         /// </summary>

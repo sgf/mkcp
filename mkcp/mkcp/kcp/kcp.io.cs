@@ -1,11 +1,12 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 
 namespace mkcp {
     public partial class Kcp {
 
         // user/upper level send, returns below zero for error
-        public int Send(byte[] buffer, int offset, int len) {
+        public int Send(Span<byte> buffer, int offset, int len) {
             Debug.Assert(mss > 0);
             if (len < 0)
                 return -1;
@@ -31,7 +32,7 @@ namespace mkcp {
                 int size = len > (int)mss ? (int)mss : len;
                 var seg = new Segment(size);
                 if (buffer != null && len > 0) {
-                    Buffer.BlockCopy(buffer, offset, seg.data, 0, size);
+                    Buffer.BlockCopy(buffer.ToArray(), offset, seg.data, 0, size);
                     offset += size;
                 }
                 seg.frg = (byte)(count - i - 1);

@@ -1,0 +1,58 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Net;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace mkcp {
+    public delegate void RawReceiveHandler(Span<byte> data, IPEndPoint endPoint);
+    public delegate void KcpClientReceiveHandler(Span<byte> data, IPEndPoint endPoint);
+
+    public class KcpClient {
+
+        private KcpClient(IPEndPoint svrIpPort) {
+            KcpSession = KcpSession.CreateClientSession(svrIpPort);
+            _sock = KcpSocket.CreateClient(svrIpPort, OnRawReceive);
+            KcpSession.kcp.SetOutput((data, size, user) => {
+                if (!KcpSession.Closed)
+                    _ = _sock.UdpSendToAsync(data, KcpSession.Peer);
+            });
+            _sock.OnUpdate+= _sock_OnUpdate;
+        }
+
+        private void _sock_OnUpdate(long obj) {
+            KcpSession.kcp.Update((uint)obj);
+        }
+
+        public static KcpClient Create(string svrIpPort) {
+            if (!IPEndPoint.TryParse(svrIpPort, out IPEndPoint ipport))
+                throw new FormatException("IP以及端口格式有问题，请检查");
+            return new KcpClient(ipport);
+        }
+
+        public KcpClient Run() {
+            _ = _sock.ReceiveLoop();
+            _sock.RunKcpLoop();
+            return this;
+        }
+
+        private readonly KcpSocket _sock;
+
+        private readonly KcpSession KcpSession;
+
+        public event KcpClientReceiveHandler OnKcpReceive;
+
+        private void OnRawReceive(Span<byte> data, IPEndPoint endPoint) {
+            if (endPoint != KcpSession.Peer) return;//忽略不是目标服务器的端口
+            KcpSession.KCPInput(KcpSession, data);
+            using var mem = _sock.GetMemory(OS._4kb);
+            var buff = mem.Memory.ToArray();
+            var rcnt = KcpSession.kcp.Recv(buff, 0, mem.Memory.Length);
+            if (rcnt > 0)
+                OnKcpReceive?.Invoke(buff.AsSpan().Slice(0, rcnt), endPoint);
+        }
+
+        public void Send(Span<byte> data) => KcpSession.Send(data);
+
+    }
+}

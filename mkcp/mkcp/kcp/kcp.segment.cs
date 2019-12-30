@@ -55,12 +55,23 @@ namespace mkcp {
 
         }
 
-
+        internal static (bool isbad, uint conv) IsBadHeadFormat(Span<byte> pk) {
+            //有三种结果:
+            //1.包不合法，丢弃+拉黑
+            if (pk.Length < Kcp.IKCP_OVERHEAD) { //包数据太小
+                                                 //logger?.LogInformation($"Client:{kcpSession.IP} duplicate,cant Add to Session list!");
+                return (true, 0);
+            }
+            var dataSize = pk.Length - Kcp.IKCP_OVERHEAD;
+            ref var segHead = ref pk.Read<Kcp.SegmentHead>();
+            if (dataSize < segHead.len //Data数据太小
+               || segHead.cmd < Kcp.IKCP_CMD_PUSH || segHead.cmd > Kcp.IKCP_CMD_WINS) { //cmd命令不存在
+                                                                                        //logger?.LogInformation($"Client:{kcpSession.IP} duplicate,cant Add to Session list!");
+                return (true, segHead.conv);
+            }
+            return (false, segHead.conv);
+        }
     }
-    internal static class SpanEx {
-        public static ref T Read<T>(this Span<byte> buff) where T : struct => ref MemoryMarshal.AsRef<T>(buff);
-        public static ref T Read<T>(this Span<byte> buff, int offset) where T : struct => ref MemoryMarshal.AsRef<T>(buff.Slice(offset));
 
-    }
 
 }
