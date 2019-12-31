@@ -3,21 +3,21 @@ using System.Collections.Generic;
 using System.Net;
 using System.Text;
 using System.Threading.Tasks;
+using static mkcp.Kcp;
 
 namespace mkcp {
     public delegate void RawReceiveHandler(Span<byte> data, IPEndPoint endPoint);
     public delegate void KcpClientReceiveHandler(Span<byte> data, IPEndPoint endPoint);
 
     public class KcpClient {
-
         private KcpClient(IPEndPoint svrIpPort) {
             KcpSession = KcpSession.CreateClientSession(svrIpPort);
             _sock = KcpSocket.CreateClient(svrIpPort, OnRawReceive);
             KcpSession.kcp.SetOutput((data, size, user) => {
                 if (!KcpSession.Closed)
-                    _ = _sock.UdpSendToAsync(data, KcpSession.Peer);
+                    _ = _sock.UdpSendToAsync(new Memory<byte>(data, 0, size), KcpSession.Peer);
             });
-            _sock.OnUpdate+= _sock_OnUpdate;
+            _sock.OnUpdate += _sock_OnUpdate;
         }
 
         private void _sock_OnUpdate(long obj) {
@@ -30,12 +30,6 @@ namespace mkcp {
             return new KcpClient(ipport);
         }
 
-        public KcpClient Run() {
-            _ = _sock.ReceiveLoop();
-            _sock.RunKcpLoop();
-            return this;
-        }
-
         private readonly KcpSocket _sock;
 
         private readonly KcpSession KcpSession;
@@ -44,6 +38,12 @@ namespace mkcp {
 
         private void OnRawReceive(Span<byte> data, IPEndPoint endPoint) {
             if (endPoint != KcpSession.Peer) return;//忽略不是目标服务器的端口
+            ref var seghead = ref data.Read<SegmentHead>();
+            if (!KcpSession.Connected && seghead.conv > 0) {
+                KcpSession.Connected = true;
+                KcpSession.UpdateConv(seghead.conv);
+            }
+
             KcpSession.KCPInput(KcpSession, data);
             using var mem = _sock.GetMemory(OS._4kb);
             var buff = mem.Memory.ToArray();
@@ -54,5 +54,10 @@ namespace mkcp {
 
         public void Send(Span<byte> data) => KcpSession.Send(data);
 
+        public async Task<bool> ConnectAsync() {
+            _ = _sock.ReceiveAsyncLoop();
+            _sock.RunKcpLoop();
+            return await this.KcpSession.ConnectAsync();
+        }
     }
 }

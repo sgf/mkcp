@@ -14,17 +14,19 @@ namespace mkcp {
         private KcpSocket(Socket _socket, RawReceiveHandler rawReceiveHandler) {
             this._socket = _socket;
             rawReceive = rawReceiveHandler;
+            BootTime = DateTimeOffset.UtcNow;
         }
         private readonly RawReceiveHandler rawReceive;
         public event Action<long> OnUpdate;
 
         public IMemoryOwner<byte> GetMemory(int size) => MemoryPool<byte>.Shared.Rent(size);
-        public async Task ReceiveLoop(ushort buffSize = 1472) {
+        public async Task ReceiveAsyncLoop(ushort buffSize = 1472) {
             while (true) {
                 using var mem = GetMemory(buffSize);
-                var rlt = await _socket.ReceiveMessageFromAsync(mem.Memory.ToArray(), SocketFlags.None, new IPEndPoint(IPAddress.Any, 0));
+                var buf = mem.Memory.ToArray();
+                var rlt = await _socket.ReceiveMessageFromAsync(buf, SocketFlags.None, new IPEndPoint(IPAddress.Any, 0));
                 if (rlt.ReceivedBytes > 0)
-                    rawReceive.Invoke(mem.Memory.Span.Slice(0, rlt.ReceivedBytes), (IPEndPoint)rlt.RemoteEndPoint);
+                    rawReceive.Invoke(buf.AsSpan().Slice(0, rlt.ReceivedBytes), (IPEndPoint)rlt.RemoteEndPoint);
                 else {
                     //Log......
                 }
@@ -62,14 +64,18 @@ namespace mkcp {
         private readonly Socket _socket;
         private bool Runing = false;
 
+        private readonly DateTimeOffset BootTime;
+        private uint TimeMS => (uint)DateTimeOffset.UtcNow.Subtract(BootTime).TotalMilliseconds;
+
         public void RunKcpLoop(int updateDelay = 5/*5ms*/) {
+
             if (!Runing) {
                 Runing = true;
                 _ = Task.Factory.StartNew(async () => {
                     Stopwatch sw = new Stopwatch();
                     while (true) {
                         sw.Reset();
-                        OnUpdate?.Invoke(DateTime.UtcNow.Ticks);
+                        OnUpdate?.Invoke(TimeMS);
                         var takeTime = (int)sw.ElapsedMilliseconds;
                         var waitTime = takeTime - updateDelay >= 0 ? 0 : updateDelay - takeTime;//5ms延迟
                         await Task.Delay(waitTime);//延迟

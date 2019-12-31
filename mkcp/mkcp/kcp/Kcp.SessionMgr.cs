@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Nito.AsyncEx;
+using System;
 using System.Collections.Generic;
 using System.Net;
 
@@ -26,6 +27,15 @@ namespace mkcp {
         //private readonly ILogger? logger;
         private readonly Dictionary<uint, KcpSession> Sessions = new Dictionary<uint, KcpSession>();
         private readonly Dictionary<EndPoint, KcpSession> ConList = new Dictionary<EndPoint, KcpSession>(1000);
+        readonly AsyncLock asyncLock = new AsyncLock();
+        internal void Update(long obj) {
+            using (asyncLock.Lock()) {
+                foreach (var s in Sessions.Values)
+                    s.kcp.Update((uint)obj);
+            }
+
+        }
+
         private readonly HashSet<EndPoint> BadList = new HashSet<EndPoint>(100);
         private readonly Queue<uint> SIDPool;
 
@@ -35,9 +45,9 @@ namespace mkcp {
             for (uint i = 1; i <= maxUser; i++)
                 numrangs.Add(i);
             for (int i = 1; i <= maxUser; i++) {
-                var rdx = random.Next(0, maxUser - i);
+                var rdx = random.Next(0, (maxUser - i));
                 SIDPool.Enqueue(numrangs[rdx]);
-                numrangs.RemoveAt(i);
+                numrangs.RemoveAt(rdx);
             }
         }
 

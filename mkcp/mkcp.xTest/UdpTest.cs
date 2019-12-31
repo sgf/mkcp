@@ -17,7 +17,7 @@ namespace mkcp.xTest {
 
         [Fact]
         public void UDP() {
-            svrEndPort = new IPEndPoint(IPAddress.Loopback, 7100);
+            svrEndPort = new IPEndPoint(IPAddress.Any, 7100);
             svr = SocketHelper.GetUdpSvrSocket(svrEndPort);
             cl1 = SocketHelper.GetUdpClientSocket();
             cl2 = SocketHelper.GetUdpClientSocket();
