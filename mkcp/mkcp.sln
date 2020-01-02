@@ -10,6 +10,9 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "mkcp.xTest", "mkcp.xTest\mkcp.xTest.csproj", "{3305098F-04F6-4F4C-8A5B-4A163D6EC6A0}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{48E6F3A9-7283-4C02-B087-B42642DF9549}"
+	ProjectSection(SolutionItems) = preProject
+		参考项目.txt = 参考项目.txt
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
