@@ -15,6 +15,13 @@ https://github.com/Toemsel/Network/blob/master/Network/UdpConnection.cs
 https://github.com/bitdiff/synoptic/blob/defbd4961c8d82636f3248eb3200f365b75c724f/src/Synoptic.Service/UdpServer.cs
 https://github.com/sakno/dotNext
 
+https://github.com/slicol/KCP-Socket
+https://github.com/slimccq/kcp-dotnet
+https://github.com/limpo1989/kcp-csharp
+https://github.com/beykery/kcp4sharp
+https://github.com/KumoKyaku/KCP
+https://github.com/l42111996/csharp-kcp
+
 
 https://github.com/JochenKalmbach/StackWalker
 https://github.com/boostorg/stacktrace
