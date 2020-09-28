@@ -25,7 +25,7 @@ namespace mkcp {
             ssthresh = IKCP_THRESH_INIT;
             dead_link_ = IKCP_DEADLINK;
             buffer = new byte[(mtu + IKCP_OVERHEAD) * 3];
-            snd_queue_ = new LinkedList<Segment>();
+            snd_queue_ = new Queue<Segment>();
             rcv_queue_ = new LinkedList<Segment>();
             snd_buf_ = new LinkedList<Segment>();
             rcv_buf_ = new LinkedList<Segment>();
@@ -53,7 +53,7 @@ namespace mkcp {
         }
 
         // user/upper level recv: returns size, returns below zero for EAGAIN
-        public int Recv(byte[] buffer, int offset, int len) {
+        public int input(byte[] buffer, int offset, int len) {
             int ispeek = (len < 0 ? 1 : 0);
             int recover = 0;
 
@@ -169,7 +169,9 @@ namespace mkcp {
             var rto = rx_srtt + _imax_(interval_, (UInt32)(4 * rx_rttval));
             rx_rto = (Int32)_ibound_((UInt32)rx_minrto, (UInt32)rto, IKCP_RTO_MAX);
         }
-
+        /// <summary>
+        /// 更新本地 snd_una 数据，如snd_buff为空，snd_una指向snd_nxt，否则指向send_buff首端
+        /// </summary>
         void ShrinkBuf() {
             var node = snd_buf_.First;
             if (node != null) {
@@ -180,6 +182,11 @@ namespace mkcp {
             }
         }
 
+        /// <summary>
+        /// 函数 ikcp_parse_ack 来根据 ACK 的编号确认对方收到了哪个数据包；
+        /// 实际上 更新 rtt
+        /// </summary>
+        /// <param name="sn"></param>
         void ParseACK(UInt32 sn) {
             if (_itimediff(sn, snd_una) < 0 || _itimediff(sn, snd_nxt) >= 0)
                 return;
@@ -198,6 +205,17 @@ namespace mkcp {
             }
         }
 
+        /// <summary>
+        /// 分析una，看哪些segment远端收到了，删除send_buf中小于una的segment
+        ///
+        ///
+        /// 调用 ikcp_parse_una 来确定已经发送的数据包有哪些被对方接收到。
+        /// 注意: KCP 中所有的报文类型均带有 una 信息。
+        /// 前面介绍过，发送端发送的数据都会缓存在 snd_buf 中，直到接收到对方确认信息之后才会删除。
+        /// 当接收到 una 信息后，表明 sn 小于 una 的数据包都已经被对方接收到，因此可以直接从 snd_buf 中删除。
+        /// 同时调用 ikcp_shrink_buf 来更新 KCP 控制块的 snd_una 数值。
+        /// </summary>
+        /// <param name="una"></param>
         void ParseUNA(UInt32 una) {
             LinkedListNode<Segment> next = null;
             for (var node = snd_buf_.First; node != null; node = next) {
@@ -223,7 +241,7 @@ namespace mkcp {
                 if (_itimediff(sn, seg.sn) < 0) {
                     break;
                 } else if (sn != seg.sn) {
-                    seg.faskack++;
+                    seg.fastack++;
                 }
             }
         }
@@ -333,7 +351,7 @@ namespace mkcp {
 
         // fastest: ikcp_nodelay(kcp, 1, 20, 2, 1)
         // nodelay: 0:disable(default), 1:enable
-        // interval: internal update timer interval in millisec, default is 100ms 
+        // interval: internal update timer interval in millisec, default is 100ms
         // resend: 0:disable fast resend(default), 1:enable fast resend
         // nc: 0:normal congestion control(default), 1:disable congestion control
         public int NoDelay(int nodelay, int interval, int resend, int nc) {
