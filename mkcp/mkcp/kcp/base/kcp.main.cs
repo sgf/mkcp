@@ -173,11 +173,17 @@ namespace mkcp {
         }
 
         // ack append
+        /// <summary>
+        /// push当前包的ack给远端（会在flush中发送ack出去)
+        /// 调用 ikcp_ack_push 将对该报文的确认 ACK 报文放入 ACK 列表acklist中
+        /// </summary>
+        /// <param name="sn"></param>
+        /// <param name="ts"></param>
         void ACKPush(uint sn, uint ts) {
             var newsize = ackcount_ + 1;
-            if (newsize > ackblock_) {
+            if (newsize > ackblock_) {//太小因此扩容
                 uint newblock = 8;
-                for (; newblock < newsize; newblock <<= 1)
+                for (; newblock < newsize; newblock <<= 1) // newblock <<= 1 等价于 newblock *= 2;
                     ;
 
                 var acklist = new uint[newblock * 2];

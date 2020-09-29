@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -40,46 +41,50 @@ namespace mkcp {
             internal uint len;
         }
 
-        internal class Segment {
+        internal unsafe class Segment : IDisposable {
 
             #region 网络传输部分
-            internal SegmentHead Head;
+            internal SegmentHead* Head;
 
             /// <summary>
             /// 会话id
             /// </summary>
-            internal uint conv { get { return Head.conv; } set { Head.conv = value; } }
+            internal uint conv { get { return Head->conv; } set { Head->conv = value; } }
+
             /// <summary>
             /// 协议命令
             /// </summary>
-            internal Cmd cmd { get { return Head.cmd; } set { Head.cmd = value; } }
+            internal Cmd cmd { get { return Head->cmd; } set { Head->cmd = value; } }
+
             /// <summary>
             /// message中的segment分片ID（在message中的索引，由大到小，0表示最后一个分片）
             /// </summary>
-            internal byte frg { get { return Head.frg; } set { Head.frg = value; } }
+            internal byte frg { get { return Head->frg; } set { Head->frg = value; } }
+
             /// <summary>
             /// 剩余接收窗口大小(接收窗口大小-接收队列大小)
             /// </summary>
-            internal ushort wnd { get { return Head.wnd; } set { Head.wnd = value; } }
+            internal ushort wnd { get { return Head->wnd; } set { Head->wnd = value; } }
 
             /// <summary>
             /// message发送时刻的时间戳
             /// </summary>
-            internal uint ts { get { return Head.ts; } set { Head.ts = value; } }
+            internal uint ts { get { return Head->ts; } set { Head->ts = value; } }
 
             /// <summary>
             /// message分片segment的序号
             /// </summary>
-            internal uint sn { get { return Head.sn; } set { Head.sn = value; } }
+            internal uint sn { get { return Head->sn; } set { Head->sn = value; } }
+
             /// <summary>
             /// 待接收消息序号(接收滑动窗口左端)
             /// </summary>
-            internal uint una { get { return Head.una; } set { Head.una = value; } }
+            internal uint una { get { return Head->una; } set { Head->una = value; } }
 
             /// <summary>
             /// 包长
             /// </summary>
-            internal uint len { get { return Head.len; } set { Head.len = value; } }
+            internal uint len { get { return Head->len; } set { Head->len = value; } }
 
             /// <summary>
             /// 数据包本体（如果携带数据的话）
@@ -110,17 +115,50 @@ namespace mkcp {
             public uint xmit { get; set; }
 
 
-            internal Segment(int size = 0) {
-                data = new byte[size];
+            private readonly IMemoryOwner<byte> mower;
+            public readonly Memory<byte> Data;
+
+            private Segment() {
+                var allSize = sizeof(SegmentHead);
+                mower = MemoryPool<byte>.Shared.Rent(allSize);
+                Data = mower.Memory.Slice(0, allSize);
+            }
+
+            private Segment(Span<byte> data) {
+                var allSize = sizeof(SegmentHead) + data.Length;
+                mower = MemoryPool<byte>.Shared.Rent(allSize);
+                Data = mower.Memory.Slice(0, allSize);
+                this.len=
+            }
+
+
+            /// <summary>
+            /// 带数据的
+            /// </summary>
+            /// <param name="data"></param>
+            /// <returns></returns>
+            internal static Segment Create(Span<byte> data) {
+                var sg = new Segment(data);
+                return sg;
+            }
+
+            internal static Segment Create() => new Segment();
+
+            internal static Segment Create(uint conv, Cmd cmd, int wndUnUsed, uint rcv_nxt) {
+                var sg = new Segment();
+                sg.conv = conv;
+                sg.cmd = cmd;
+                sg.wnd = (ushort)wndUnUsed;
+                sg.una = rcv_nxt;
+                return sg;
             }
 
             //MemoryMarshal.Cast<byte, SegmentHead>(ptr.AsSpan())[0] = Head; Unsafe.Copy<SegmentHead>(Unsafe.AsPointer(ref ptr.AsSpan()[0]), ref Head);
             internal unsafe void Encode(Span<byte> ptr, ref int offset) {
-                this.len = (uint)(data?.Length ?? 0);
-                ptr.Write(ref Head);
                 offset += Kcp.IKCP_OVERHEAD;
                 data.CopyTo(ptr.Slice(Kcp.IKCP_OVERHEAD));
-                offset += (int)this.len;
+                Data.Span.CopyTo(ptr);
+                offset += Data.Length;
             }
 
             internal static bool TryRead(Span<byte> pkdata, ref int offset, out Segment seg, uint conv) {
@@ -142,12 +180,24 @@ namespace mkcp {
                 var reamainData = pkdata.Slice(Kcp.IKCP_OVERHEAD);
                 if (reamainData.Length < head.len) return false;//剩下的数据长度不足
 
-                seg = new Segment();
-                seg.Head = head;
-                seg.data = head.len == 0 ? Array.Empty<byte>() :
-                    reamainData.Slice(0, (int)head.len).ToArray();
+                //seg = new Segment();
+                //seg.Head = &head;
+                //seg.data = head.len == 0 ? Array.Empty<byte>() :
+                //    reamainData.Slice(0, (int)head.len).ToArray();
+                seg = Create(pkdata);
+
                 offset += (int)head.len;
                 return true;
+            }
+
+
+
+            private bool disposed = false;
+            public void Dispose() {
+                if (!disposed) {
+                    disposed = true;
+                    mower?.Dispose();
+                }
             }
 
         }
@@ -161,12 +211,12 @@ namespace mkcp {
             }
             var dataSize = pk.Length - Kcp.IKCP_OVERHEAD;
             ref var segHead = ref pk.Read<Kcp.SegmentHead>();
-            if (dataSize < segHead.len //Data数据太小
-               || segHead.cmd < Cmd.IKCP_CMD_PUSH || segHead.cmd > Cmd.IKCP_CMD_WINS) { //cmd命令不存在
-                                                                                        //logger?.LogInformation($"Client:{kcpSession.IP} duplicate,cant Add to Session list!");
-                return (true, segHead.conv);
+            if (dataSize < segHead->len //Data数据太小
+               || segHead->cmd < Cmd.IKCP_CMD_PUSH || segHead->cmd > Cmd.IKCP_CMD_WINS) { //cmd命令不存在
+                                                                                          //logger?.LogInformation($"Client:{kcpSession.IP} duplicate,cant Add to Session list!");
+                return (true, segHead->conv);
             }
-            return (false, segHead.conv);
+            return (false, segHead->conv);
         }
     }
 

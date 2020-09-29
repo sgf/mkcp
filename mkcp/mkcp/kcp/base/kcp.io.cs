@@ -27,7 +27,7 @@ namespace mkcp {
             if (count == 0)
                 count = 1;
 
-            // fragment
+            // fragment/数据分段
             for (int i = 0; i < count; i++) {
                 int size = len > (int)mss ? (int)mss : len;
                 var seg = new Segment(size);
@@ -205,9 +205,8 @@ namespace mkcp {
                 ShrinkBuf();
 
                 if (seg.cmd == Cmd.IKCP_CMD_ACK) {
-                    if (_itimediff(current_, seg.ts) >= 0) {
+                    if (current_ >= seg.ts)
                         UpdateACK(_itimediff(current_, seg.ts));
-                    }
                     ParseACK(seg.sn);
                     ShrinkBuf();
                     if (!flag) {
@@ -224,7 +223,7 @@ namespace mkcp {
                     Log(IKCP_LOG_IN_DATA, "input psh: sn={0} ts={1}", seg.sn, seg.ts);
                     if (_itimediff(seg.sn, rcv_nxt + rcv_wnd) < 0) {
                         ACKPush(seg.sn, seg.ts);
-                        if (_itimediff(seg.sn, rcv_nxt) >= 0) {
+                        if (_itimediff(seg.sn, rcv_nxt) >= 0) {//（可能是判断是否是冗余包！）这里需要搞清楚为什么要判断，因为上面实际上如果是有数据的话读取包头的时候就一并读取出来 到 Segment里面去了
                             var seg1 = new Segment((int)seg.len);
                             seg1.conv = seg.conv;
                             seg1.cmd = seg.cmd;
@@ -279,23 +278,19 @@ namespace mkcp {
             return 0;
         }
 
-        // flush pending data
+        /// <summary>
+        /// flush pending data
+        /// </summary>
         void Flush() {
-            int change = 0;
-            int lost = 0;
+            int change = 0;// 标识快重传发生
+            int lost = 0; // 记录出现了报文丢失
             int offset = 0;
 
             // 'ikcp_update' haven't been called.
-            if (updated_ == 0)
-                return;
+            //检查 kcp->update 是否更新，未更新直接返回。 //kcp->update 由 ikcp_update 更新，// 上层应用需要每隔一段时间（10-100ms）调用 ikcp_update 来驱动 KCP 发送数据；
+            if (updated_ == 0) return;
 
-            var seg = new Segment {
-                conv = conv,
-                cmd = Cmd.IKCP_CMD_ACK,
-                wnd = (ushort)WndUnused(),
-                una = rcv_nxt,
-            };
-
+            var seg = Segment.Create(conv, Cmd.IKCP_CMD_ACK, WndUnused(), rcv_nxt);
             // flush acknowledges
             int count = (int)ackcount_;
             for (int i = 0; i < count; i++) {
