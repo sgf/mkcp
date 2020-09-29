@@ -16,4 +16,8 @@
     <PackageReference Include="Nito.AsyncEx" Version="5.0.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="kcp\fec\" />
+  </ItemGroup>
+
 </Project>

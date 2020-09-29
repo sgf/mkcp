@@ -41,7 +41,7 @@ namespace mkcp {
             KcpSession.KCPInput(session, data);
             using var mem = _sock.GetMemory(OS._8kb);
             var buff = mem.Memory.ToArray();
-            var rcnt = session.kcp.input(buff, 0, buff.Length);
+            var rcnt = session.kcp.Recv(buff, 0, buff.Length);
             if (rcnt > 0)
                 OnKcpReceive?.Invoke(session,buff.AsSpan().Slice(0, rcnt), endPoint);
         }

@@ -1,6 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
-using System.Runtime.CompilerServices;
 
 namespace mkcp {
     public partial class Kcp {
@@ -42,6 +42,81 @@ namespace mkcp {
             }
             return 0;
         }
+
+        // user/upper level recv: returns size, returns below zero for EAGAIN
+        public int Recv(byte[] buffer, int offset, int len) {
+            int ispeek = (len < 0 ? 1 : 0);
+            int recover = 0;
+
+            if (rcv_queue_.Count == 0)
+                return -1;
+
+            if (len < 0)
+                len = -len;
+
+            int peeksize = PeekSize();
+            if (peeksize < 0)
+                return -2;
+
+            if (peeksize > len)
+                return -3;
+
+            if (nrcv_que_ >= rcv_wnd)
+                recover = 1;
+
+            // merge fragment
+            len = 0;
+            LinkedListNode<Segment> next = null;
+            for (var node = rcv_queue_.First; node != null; node = next) {
+                int fragment = 0;
+                var seg = node.Value;
+                next = node.Next;
+
+                if (buffer != null) {
+                    Buffer.BlockCopy(seg.data, 0, buffer, offset, seg.data.Length);
+                    offset += seg.data.Length;
+                }
+                len += seg.data.Length;
+                fragment = (int)seg.frg;
+
+                Log(IKCP_LOG_RECV, "recv sn={0}", seg.sn);
+
+                if (ispeek == 0) {
+                    rcv_queue_.Remove(node);
+                    nrcv_que_--;
+                }
+
+                if (fragment == 0)
+                    break;
+            }
+
+            Debug.Assert(len == peeksize);
+
+            // move available data from rcv_buf -> rcv_queue
+            while (rcv_buf_.Count > 0) {
+                var node = rcv_buf_.First;
+                var seg = node.Value;
+                if (seg.sn == rcv_nxt && nrcv_que_ < rcv_wnd) {
+                    rcv_buf_.Remove(node);
+                    nrcv_buf_--;
+                    rcv_queue_.AddLast(node);
+                    nrcv_que_++;
+                    rcv_nxt++;
+                } else {
+                    break;
+                }
+            }
+
+            // fast recover
+            if (nrcv_que_ < rcv_wnd && recover != 0) {
+                // ready to send back IKCP_CMD_WINS in ikcp_flush
+                // tell remote my window size
+                probe |= IKCP_ASK_TELL;
+            }
+
+            return len;
+        }
+
 
         // update state (call it repeatedly, every 10ms-100ms), or you can ask
         // ikcp_check when to call it again (without ikcp_input/_send calling).
@@ -171,7 +246,7 @@ namespace mkcp {
                     Log(IKCP_LOG_IN_PROBE, "input probe");
                 } else if (seg.cmd == Cmd.IKCP_CMD_WINS) {
                     // do nothing
-                    Log(IKCP_LOG_IN_WINS, "input wins: {seg.wnd}" );
+                    Log(IKCP_LOG_IN_WINS, "input wins: {seg.wnd}");
                 } else {
                     return -3;
                 }
@@ -203,9 +278,6 @@ namespace mkcp {
 
             return 0;
         }
-
-
-
 
         // flush pending data
         void Flush() {
@@ -302,7 +374,7 @@ namespace mkcp {
                 newseg.sn = snd_nxt++;
                 newseg.una = rcv_nxt;
                 newseg.resendts = current_;
-                newseg.rto = rx_rto;
+                newseg.rto = (uint)rx_rto;
                 newseg.fastack = 0;
                 newseg.xmit = 0;
             }
@@ -318,16 +390,16 @@ namespace mkcp {
                 if (segment.xmit == 0) {
                     needsend = 1;
                     segment.xmit++;
-                    segment.rto =rx_rto;
+                    segment.rto = (uint)rx_rto;
                     segment.resendts = current_ + segment.rto + rtomin;
                 } else if (_itimediff(current_, segment.resendts) >= 0) {
                     needsend = 1;
                     segment.xmit++;
                     xmit_++;
                     if (nodelay_ == 0)
-                        segment.rto += rx_rto;
+                        segment.rto += (uint)rx_rto;
                     else
-                        segment.rto += rx_rto / 2;
+                        segment.rto += (uint)rx_rto / 2;
                     segment.resendts = current_ + segment.rto;
                     lost = 1;
                 } else if (segment.fastack >= resent) {

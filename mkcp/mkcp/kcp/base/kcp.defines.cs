@@ -2,6 +2,19 @@
 using System.Collections.Generic;
 
 namespace mkcp {
+    /// <summary>
+    /// 基本概念
+    /// rto，RTO 超时重传 ——(Retransmission TimeOut)
+    /// rtt,RTT  往返时延 ——(Round Trip Time)   由三部分组成：链路的传播时间（propagation delay),末端系统的处理时间，路由器缓存中的排队和处理时间（queuing delay）。
+    /// UNA（此编号前所有包已收到，如TCP）—— 表示还没有被ACK确认的数据包里面最早的序列号 可能是Un-Ack 的缩写
+    /// ACK（该编号包已收到） acknowledgement
+    ///
+    ///
+    ///
+    ///
+    ///
+    ///
+    /// </summary>
     public partial class Kcp {
         /// <summary>
         /// no delay min rto
@@ -39,13 +52,20 @@ namespace mkcp {
         public const int IKCP_ASK_TELL = 2;
         public const int IKCP_WND_SND = 32;
         public const int IKCP_WND_RCV = 32;
+        /// <summary>
+        /// 建议值最好是1370以下（某些移动端的场景问题，甚至如果有必要 极端的 设置到480，穿透力更强）
+        /// 原值为:1400; 通常MTU的长度为1500字节，IP协议规定所有的路由器均应该能够转发（512数据+60IP首部+4预留=576字节）的数据
+        /// </summary>
         public const int IKCP_MTU_DEF = 1400;
-        public const int IKCP_ACK_FAST = 3;//???这个似乎没有？
+        public const int IKCP_ACK_FAST = 3;
         public const int IKCP_INTERVAL = 100;
         /// <summary>
         /// Kcp包头大小
         /// </summary>
         public const int IKCP_OVERHEAD = 24;
+        /// <summary>
+        /// 死连接 重传达到该值时认为连接是断开的
+        /// </summary>
         public const int IKCP_DEADLINK = 20;
         public const int IKCP_THRESH_INIT = 2;
         public const int IKCP_THRESH_MIN = 2;
@@ -110,15 +130,15 @@ namespace mkcp {
         uint ts_lastack_ { get; set; } = 0;
 #pragma warning restore S1144 // Unused private types or members should be removed
         /// <summary>
-        /// 拥塞窗口阈值
+        /// 拥塞窗口阈值，以包为单位（TCP以字节为单位）；
         /// </summary>
         uint ssthresh { get; set; } = 0;
         /// <summary>
-        /// ack接收rtt浮动值
+        /// RTT的变化量，代表连接的抖动情况；（ack接收rtt浮动值）
         /// </summary>
         Int32 rx_rttval { get; set; } = 0;
         /// <summary>
-        /// ack接收rtt静态值
+        /// smoothed round trip time，平滑后的RTT；（ack接收rtt静态值）
         /// </summary>
         Int32 rx_srtt { get; set; } = 0;
         /// <summary>
@@ -126,15 +146,15 @@ namespace mkcp {
         /// </summary>
         Int32 rx_rto { get; set; } = 0;
         /// <summary>
-        /// 最小重传超时时间
+        /// 最小重传超时时间；
         /// </summary>
         Int32 rx_minrto { get; set; } = 0;
         /// <summary>
-        /// 发送窗口大小, 一旦设置之后就不会变了, 默认32
+        /// 发送窗口大小
         /// </summary>
         uint snd_wnd { get; set; } = 0;
         /// <summary>
-        /// 接收窗口大小, 一旦设置之后就不会变了, 默认128
+        /// 接收窗口大小
         /// </summary>
         uint rcv_wnd { get; set; } = 0;
         /// <summary>
@@ -149,15 +169,22 @@ namespace mkcp {
         /// 探查变量，IKCP_ASK_TELL表示告知远端窗口大小。IKCP_ASK_SEND表示请求远端告知窗口大小
         /// </summary>
         uint probe { get; set; } = 0;
+
+        /// <summary>
+        /// 当前时间
+        /// </summary>
         uint current_ { get; set; } = 0;
         /// <summary>
-        /// 内部flush刷新间隔
+        /// 内部flush刷新间隔，对系统循环效率有非常重要影响；
         /// </summary>
         uint interval_ { get; set; } = 0;
         /// <summary>
         /// 下次flush刷新时间戳
         /// </summary>
         uint ts_flush_ { get; set; } = 0;
+        /// <summary>
+        /// 发送segment的次数，当segment的xmit增加时，xmit增加（第一次或重传除外）；
+        /// </summary>
         uint xmit_ { get; set; } = 0;
         /// <summary>
         /// 收缓存区中的Segment数量
@@ -176,7 +203,7 @@ namespace mkcp {
         /// </summary>
         uint nsnd_que_ { get; set; } = 0;
         /// <summary>
-        /// 是否启动无延迟模式
+        /// 是否启动无延迟模式。无延迟模式rtomin将设置为0，拥塞控制不启动；
         /// </summary>
         uint nodelay_ { get; set; } = 0;
         /// <summary>
@@ -192,11 +219,11 @@ namespace mkcp {
         /// </summary>
         uint probe_wait_ { get; set; } = 0;
         /// <summary>
-        /// 最大重传次数
+        /// 最大重传次数，被认为连接中断；
         /// </summary>
         uint dead_link_ { get; set; } = 0;
         /// <summary>
-        /// 可发送的最大数据量
+        /// 可发送的最大数据量；
         /// </summary>
         uint incr_ { get; set; } = 0;
 
@@ -215,16 +242,32 @@ namespace mkcp {
         LinkedList<Segment> rcv_buf_ { get; set; }
 
         /// <summary>
-        ///  收到包后要发送的回传确认。
+        /// 待发送的ack列表； 收到包后要发送的回传确认。
         /// </summary>
         uint[] acklist_ { get; set; }
+        /// <summary>
+        /// acklist中ack的数量，每个ack在acklist中存储ts，sn两个量；
+        /// </summary>
         uint ackcount_ { get; set; } = 0;
+        /// <summary>
+        /// 2的倍数，标识acklist最大可容纳的ack数量；
+        /// </summary>
         uint ackblock_ { get; set; } = 0;
-
+        /// <summary>
+        /// 存储消息字节流；
+        /// </summary>
         byte[] buffer { get; set; }
+        /// <summary>
+        /// 指针，可以任意放置代表用户的数据，也可以设置程序中需要传递的变量；
+        /// </summary>
         object user_ { get; set; }
-
+        /// <summary>
+        /// 触发快速重传的重复ACK个数；
+        /// </summary>
         Int32 fastresend_ { get; set; } = 0;
+        /// <summary>
+        /// 取消拥塞控制；
+        /// </summary>
         Int32 nocwnd_ { get; set; } = 0;
 
         public delegate void OutputDelegate(byte[] data, int size, object user);

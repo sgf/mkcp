@@ -8,8 +8,6 @@ namespace mkcp {
     public partial class Kcp {
 
 
-
-
         internal enum Cmd : byte {
             /// <summary>
             /// cmd: push data
@@ -94,12 +92,12 @@ namespace mkcp {
             /// <summary>
             /// 下次超时重传的时间戳
             /// </summary>
-            public long resendts { get; set; }
+            public uint resendts { get; set; }
 
             /// <summary>
             /// 该分片的超时重传等待时间
             /// </summary>
-            public int rto { get; set; }
+            public uint rto { get; set; }
 
             /// <summary>
             /// 快速Ack,收到ack时计算的该分片被跳过的累计次数，即：该分片后的包都被对方收到了，达到一定次数，重传当前分片
@@ -109,7 +107,7 @@ namespace mkcp {
             /// <summary>
             /// 发送分片的次数，每发送一次加一
             /// </summary>
-            public int xmit { get; set; }
+            public uint xmit { get; set; }
 
 
             internal Segment(int size = 0) {

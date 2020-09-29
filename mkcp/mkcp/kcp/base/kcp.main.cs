@@ -8,7 +8,7 @@ namespace mkcp {
         // create a new kcp control object, 'conv' must equal in two endpoint
         // from the same connection. 'user' will be passed to the output callback
         // output callback can be setup like this: 'kcp->output = my_udp_output'
-        public Kcp(UInt32 conv, object user) {
+        public Kcp(uint conv, object user) {
             Debug.Assert(BitConverter.IsLittleEndian); // we only support little endian device
 
             user_ = user;
@@ -52,80 +52,6 @@ namespace mkcp {
             output_ = output;
         }
 
-        // user/upper level recv: returns size, returns below zero for EAGAIN
-        public int input(byte[] buffer, int offset, int len) {
-            int ispeek = (len < 0 ? 1 : 0);
-            int recover = 0;
-
-            if (rcv_queue_.Count == 0)
-                return -1;
-
-            if (len < 0)
-                len = -len;
-
-            int peeksize = PeekSize();
-            if (peeksize < 0)
-                return -2;
-
-            if (peeksize > len)
-                return -3;
-
-            if (nrcv_que_ >= rcv_wnd)
-                recover = 1;
-
-            // merge fragment
-            len = 0;
-            LinkedListNode<Segment> next = null;
-            for (var node = rcv_queue_.First; node != null; node = next) {
-                int fragment = 0;
-                var seg = node.Value;
-                next = node.Next;
-
-                if (buffer != null) {
-                    Buffer.BlockCopy(seg.data, 0, buffer, offset, seg.data.Length);
-                    offset += seg.data.Length;
-                }
-                len += seg.data.Length;
-                fragment = (int)seg.frg;
-
-                Log(IKCP_LOG_RECV, "recv sn={0}", seg.sn);
-
-                if (ispeek == 0) {
-                    rcv_queue_.Remove(node);
-                    nrcv_que_--;
-                }
-
-                if (fragment == 0)
-                    break;
-            }
-
-            Debug.Assert(len == peeksize);
-
-            // move available data from rcv_buf -> rcv_queue
-            while (rcv_buf_.Count > 0) {
-                var node = rcv_buf_.First;
-                var seg = node.Value;
-                if (seg.sn == rcv_nxt && nrcv_que_ < rcv_wnd) {
-                    rcv_buf_.Remove(node);
-                    nrcv_buf_--;
-                    rcv_queue_.AddLast(node);
-                    nrcv_que_++;
-                    rcv_nxt++;
-                } else {
-                    break;
-                }
-            }
-
-            // fast recover
-            if (nrcv_que_ < rcv_wnd && recover != 0) {
-                // ready to send back IKCP_CMD_WINS in ikcp_flush
-                // tell remote my window size
-                probe |= IKCP_ASK_TELL;
-            }
-
-            return len;
-        }
-
         // check the size of next message in the recv queue
         public int PeekSize() {
             if (rcv_queue_.Count == 0)
@@ -149,7 +75,6 @@ namespace mkcp {
             return length;
         }
 
-
         // parse ack
         void UpdateACK(Int32 rtt) {
             if (rx_srtt == 0) {
@@ -166,9 +91,10 @@ namespace mkcp {
                     rx_srtt = 1;
             }
 
-            var rto = rx_srtt + _imax_(interval_, (UInt32)(4 * rx_rttval));
-            rx_rto = (Int32)_ibound_((UInt32)rx_minrto, (UInt32)rto, IKCP_RTO_MAX);
+            var rto = rx_srtt + _imax_(interval_, (uint)(4 * rx_rttval));
+            rx_rto = (Int32)_ibound_((uint)rx_minrto, (uint)rto, IKCP_RTO_MAX);
         }
+
         /// <summary>
         /// 更新本地 snd_una 数据，如snd_buff为空，snd_una指向snd_nxt，否则指向send_buff首端
         /// </summary>
@@ -187,7 +113,7 @@ namespace mkcp {
         /// 实际上 更新 rtt
         /// </summary>
         /// <param name="sn"></param>
-        void ParseACK(UInt32 sn) {
+        void ParseACK(uint sn) {
             if (_itimediff(sn, snd_una) < 0 || _itimediff(sn, snd_nxt) >= 0)
                 return;
 
@@ -216,7 +142,7 @@ namespace mkcp {
         /// 同时调用 ikcp_shrink_buf 来更新 KCP 控制块的 snd_una 数值。
         /// </summary>
         /// <param name="una"></param>
-        void ParseUNA(UInt32 una) {
+        void ParseUNA(uint una) {
             LinkedListNode<Segment> next = null;
             for (var node = snd_buf_.First; node != null; node = next) {
                 var seg = node.Value;
@@ -230,7 +156,7 @@ namespace mkcp {
             }
         }
 
-        void ParseFastACK(UInt32 sn) {
+        void ParseFastACK(uint sn) {
             if (_itimediff(sn, snd_una) < 0 || _itimediff(sn, snd_nxt) >= 0)
                 return;
 
@@ -247,14 +173,14 @@ namespace mkcp {
         }
 
         // ack append
-        void ACKPush(UInt32 sn, UInt32 ts) {
+        void ACKPush(uint sn, uint ts) {
             var newsize = ackcount_ + 1;
             if (newsize > ackblock_) {
-                UInt32 newblock = 8;
+                uint newblock = 8;
                 for (; newblock < newsize; newblock <<= 1)
                     ;
 
-                var acklist = new UInt32[newblock * 2];
+                var acklist = new uint[newblock * 2];
                 if (acklist_ != null) {
                     for (var i = 0; i < ackcount_; i++) {
                         acklist[i * 2] = acklist_[i * 2];
@@ -269,14 +195,14 @@ namespace mkcp {
             ackcount_++;
         }
 
-        void ACKGet(int pos, ref UInt32 sn, ref UInt32 ts) {
+        void ACKGet(int pos, ref uint sn, ref uint ts) {
             sn = acklist_[pos * 2];
             ts = acklist_[pos * 2 + 1];
         }
 
         // parse data
         void ParseData(Segment newseg) {
-            UInt32 sn = newseg.sn;
+            uint sn = newseg.sn;
             int repeat = 0;
 
             if (_itimediff(sn, rcv_nxt + rcv_wnd) >= 0 ||
@@ -327,17 +253,7 @@ namespace mkcp {
                 return (int)(rcv_wnd - nrcv_que_);
             return 0;
         }
-        // change MTU size, default is 1400
-        public int SetMTU(int mtu) {
-            if (mtu < 50 || mtu < IKCP_OVERHEAD)
-                return -1;
 
-            var buffer = new byte[(mtu + IKCP_OVERHEAD) * 3];
-            this.mtu = (UInt32)mtu;
-            mss = this.mtu - IKCP_OVERHEAD;
-            this.buffer = buffer;
-            return 0;
-        }
 
         public int Interval(int interval) {
             if (interval > 5000)
@@ -345,72 +261,20 @@ namespace mkcp {
             else if (interval < 10)
                 interval = 10;
 
-            interval_ = (UInt32)interval;
+            interval_ = (uint)interval;
             return 0;
         }
 
-        // fastest: ikcp_nodelay(kcp, 1, 20, 2, 1)
-        // nodelay: 0:disable(default), 1:enable
-        // interval: internal update timer interval in millisec, default is 100ms
-        // resend: 0:disable fast resend(default), 1:enable fast resend
-        // nc: 0:normal congestion control(default), 1:disable congestion control
-        public int NoDelay(int nodelay, int interval, int resend, int nc) {
-            if (nodelay >= 0) {
-                nodelay_ = (UInt32)nodelay;
-                if (nodelay > 0) {
-                    rx_minrto = IKCP_RTO_NDL;
-                } else {
-                    rx_minrto = IKCP_RTO_MIN;
-                }
-            }
-            if (interval >= 0) {
-                if (interval > 5000)
-                    interval = 5000;
-                else if (interval < 10)
-                    interval = 10;
 
-                interval_ = (UInt32)interval;
-            }
 
-            if (resend >= 0)
-                fastresend_ = resend;
-
-            if (nc >= 0)
-                nocwnd_ = nc;
-
-            return 0;
-        }
-
-        // set maximum window size: sndwnd=32, rcvwnd=32 by default
-        public int WndSize(int sndwnd, int rcvwnd) {
-            if (sndwnd > 0)
-                snd_wnd = (UInt32)sndwnd;
-            if (rcvwnd > 0)
-                rcv_wnd = (UInt32)rcvwnd;
-            return 0;
-        }
 
         // get how many packet is waiting to be sent
-        public int WaitSnd() {
-            return (int)(nsnd_buf + nsnd_que_);
-        }
-
+        public int WaitSnd() => (int)(nsnd_buf + nsnd_que_);
         // read conv
-        public UInt32 GetConv() {
-            return conv;
-        }
+        public uint GetConv() => conv;
 
-        public UInt32 GetState() {
-            return state;
-        }
+        public uint GetState() => state;
 
-        public void SetMinRTO(int minrto) {
-            rx_minrto = minrto;
-        }
-
-        public void SetFastResend(int resend) {
-            fastresend_ = resend;
-        }
 
         void Log(int mask, string format, params object[] args) {
             // Console.WriteLine(mask + String.Format(format, args));
