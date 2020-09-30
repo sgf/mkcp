@@ -41,10 +41,6 @@ namespace mkcp {
             buffer = null;
         }
 
-        // set output callback, which will be invoked by kcp
-        public void SetOutput(OutputDelegate output) {
-            output_ = output;
-        }
 
         // check the size of next message in the recv queue
         public int PeekSize() {

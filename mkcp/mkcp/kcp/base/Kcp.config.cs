@@ -21,6 +21,10 @@ namespace mkcp {
         }
 
 
+        // set output callback, which will be invoked by kcp
+        public void SetOutput(OutputDelegate output) => output_ = output;
+
+
         /// <summary>
         /// ikcp_nodelay(kcp, 1, 20, 2, 1)
         /// </summary>
@@ -33,7 +37,7 @@ namespace mkcp {
         /// <param name="nc">是否关闭拥塞控制(流控)，默认是false代表不关闭，true代表关闭。
         /// 0:normal congestion control(default), 1:disable congestion control</param>
         /// <returns></returns>
-        public int SetNoDelay(bool nodelay, int interval, int resend, bool nc = false) {
+        internal int SetNoDelay(bool nodelay, int interval, int resend, bool nc = false) {
                 nodelay_ =nodelay;
                 if (nodelay) {
                     rx_minrto = IKCP_RTO_NDL;
