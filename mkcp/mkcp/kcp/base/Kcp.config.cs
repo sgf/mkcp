@@ -11,9 +11,9 @@ namespace mkcp {
         public static Kcp Create(bool fastMode = true) {
             var kcp = new Kcp(0, null);
             if (!fastMode)
-                kcp.SetNoDelay(0, 40, 0, 0); //普通模式 ikcp_nodelay(kcp, 0, 40, 0, 0);
+                kcp.SetNoDelay(false, 40, 0, false); //普通模式 ikcp_nodelay(kcp, 0, 40, 0, 0);
             else
-                kcp.SetNoDelay(1, 10, 2, 1);//极速模式 ikcp_nodelay(kcp, 1, 10, 2, 1);
+                kcp.SetNoDelay(true, 10, 2, true);//极速模式 ikcp_nodelay(kcp, 1, 10, 2, 1);
             kcp.SetWndSize(128, 128);//收发队列大小(不绝对，有一定的弹性)
             kcp.SetMTU(1024); //最大传输单元
             kcp.SetMinRTO(10);
@@ -28,20 +28,18 @@ namespace mkcp {
         /// 0:disable(default), 1:enable </param>
         /// <param name="interval">协议内部工作的 interval，单位毫秒，比如 10ms或者 20ms
         /// internal update timer interval in millisec, default is 100ms</param>
-        /// <param name="resend">快速重传模式，默认0关闭，可以设置2（2次ACK跨越将会直接重传）
+        /// <param name="resend">快速重传模式(Ack可跨越次数阈值)，默认0关闭，可以设置2（2次ACK跨越将会直接重传）
         /// 0:disable fast resend(default), 1:enable fast resend</param>
-        /// <param name="nc">是否关闭流控，默认是0代表不关闭，1代表关闭。
+        /// <param name="nc">是否关闭拥塞控制(流控)，默认是false代表不关闭，true代表关闭。
         /// 0:normal congestion control(default), 1:disable congestion control</param>
         /// <returns></returns>
-        public int SetNoDelay(int nodelay, int interval, int resend, int nc) {
-            if (nodelay >= 0) {
-                nodelay_ = (uint)nodelay;
-                if (nodelay > 0) {
+        public int SetNoDelay(bool nodelay, int interval, int resend, bool nc = false) {
+                nodelay_ =nodelay;
+                if (nodelay) {
                     rx_minrto = IKCP_RTO_NDL;
                 } else {
                     rx_minrto = IKCP_RTO_MIN;
                 }
-            }
             if (interval >= 0) {
                 if (interval > 5000)
                     interval = 5000;
@@ -54,7 +52,7 @@ namespace mkcp {
             if (resend >= 0)
                 fastresend_ = resend;
 
-            if (nc >= 0)
+            if (nc)
                 nocwnd_ = nc;
 
             return 0;
@@ -113,10 +111,10 @@ namespace mkcp {
         /// <param name="resend"></param>
         public void SetFastResend(int resend) => fastresend_ = resend;
 
-
         /// <summary>
-        /// SendMax=255*mss , mss=(mtu-包头)
+        /// Send函数单次，可以发送的最大数据大小
         /// </summary>
+        /// <remarks>SendMax=255*mss , mss=(mtu-包头)</remarks>
         public int SendMax => byte.MaxValue * (int)mss;
 
     }

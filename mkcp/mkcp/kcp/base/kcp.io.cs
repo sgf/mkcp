@@ -61,7 +61,7 @@ namespace mkcp {
             if (peeksize > len)
                 return -3;
 
-            if (nrcv_que_ >= rcv_wnd)
+            if (rcv_queue_.Count >= rcv_wnd)
                 recover = 1;
 
             // merge fragment
@@ -73,17 +73,16 @@ namespace mkcp {
                 next = node.Next;
 
                 if (buffer != null) {
-                    Buffer.BlockCopy(seg.data, 0, buffer, offset, seg.data.Length);
-                    offset += seg.data.Length;
+                    Buffer.BlockCopy(seg.Data.ToArray(), 0, buffer, offset, seg.Data.Length);
+                    offset += seg.Data.Length;
                 }
-                len += seg.data.Length;
+                len += seg.Data.Length;
                 fragment = (int)seg.frg;
 
-                Log(IKCP_LOG_RECV, "recv sn={0}", seg.sn);
+                Log(kLog.RECV, "recv sn={0}", seg.sn);
 
                 if (ispeek == 0) {
                     rcv_queue_.Remove(node);
-                    nrcv_que_--;
                 }
 
                 if (fragment == 0)
@@ -96,11 +95,9 @@ namespace mkcp {
             while (rcv_buf_.Count > 0) {
                 var node = rcv_buf_.First;
                 var seg = node.Value;
-                if (seg.sn == rcv_nxt && nrcv_que_ < rcv_wnd) {
+                if (seg.sn == rcv_nxt && rcv_queue_.Count < rcv_wnd) {
                     rcv_buf_.Remove(node);
-                    nrcv_buf_--;
                     rcv_queue_.AddLast(node);
-                    nrcv_que_++;
                     rcv_nxt++;
                 } else {
                     break;
@@ -108,10 +105,10 @@ namespace mkcp {
             }
 
             // fast recover
-            if (nrcv_que_ < rcv_wnd && recover != 0) {
+            if (rcv_queue_.Count < rcv_wnd && recover != 0) {
                 // ready to send back IKCP_CMD_WINS in ikcp_flush
                 // tell remote my window size
-                probe |= IKCP_ASK_TELL;
+                probe |= Porbe.IKCP_ASK_TELL;
             }
 
             return len;
@@ -121,14 +118,14 @@ namespace mkcp {
         // update state (call it repeatedly, every 10ms-100ms), or you can ask
         // ikcp_check when to call it again (without ikcp_input/_send calling).
         // 'current' - current timestamp in millisec.
-        public void Update(UInt32 current) {
+        public void Update(uint current) {
             current_ = current;
-            if (updated_ == 0) {
-                updated_ = 1;
+            if (!updated_) {
+                updated_ = true;
                 ts_flush_ = current;
             }
 
-            Int32 slap = _itimediff(current_, ts_flush_);
+            int slap = _itimediff(current_, ts_flush_);
             if (slap >= 10000 || slap < -10000) {
                 ts_flush_ = current;
                 slap = 0;
@@ -150,12 +147,12 @@ namespace mkcp {
         // Important to reduce unnacessary ikcp_update invoking. use it to
         // schedule ikcp_update (eg. implementing an epoll-like mechanism,
         // or optimize ikcp_update when handling massive kcp connections)
-        public UInt32 Check(UInt32 current) {
-            UInt32 ts_flush = ts_flush_;
-            Int32 tm_flush = 0x7fffffff;
-            Int32 tm_packet = 0x7fffffff;
+        public uint Check(uint current) {
+            uint ts_flush = ts_flush_;
+            int tm_flush = 0x7fffffff;
+            int tm_packet = 0x7fffffff;
 
-            if (updated_ == 0)
+            if (!updated_)
                 return current;
 
             if (_itimediff(current, ts_flush) >= 10000 ||
@@ -170,7 +167,7 @@ namespace mkcp {
 
             for (var node = snd_buf_.First; node != null; node = node.Next) {
                 var seg = node.Value;
-                Int32 diff = _itimediff(seg.resendts, current);
+                int diff = _itimediff(seg.resendts, current);
                 if (diff <= 0)
                     return current;
 
@@ -178,7 +175,7 @@ namespace mkcp {
                     tm_packet = diff;
             }
 
-            UInt32 minimal = (UInt32)(tm_packet < tm_flush ? tm_packet : tm_flush);
+            uint minimal = (uint)(tm_packet < tm_flush ? tm_packet : tm_flush);
             if (minimal >= interval_)
                 minimal = interval_;
 
@@ -187,16 +184,16 @@ namespace mkcp {
 
         // when you received a low level packet (eg. UDP packet), call it
         public int Input(Span<byte> data) {
-            UInt32 maxack = 0;
+            uint maxack = 0;
             bool flag = false;
 
             int offset = 0;
             int size = data.Length;
 
-            Log(IKCP_LOG_INPUT, $"[RI] {size} bytes");
+            Log(kLog.INPUT, $"[RI] {size} bytes");
 
             while (true) {
-                if (size < IKCP_OVERHEAD) break;//数据太小
+                if (size < IKCP_OVERHEAD) break;
                 if (!Segment.TryRead(data, ref offset, out Segment seg, this.conv))
                     return -1;
 
@@ -217,35 +214,34 @@ namespace mkcp {
                             maxack = seg.sn;
                         }
                     }
-                    Log(IKCP_LOG_IN_DATA, "input ack: sn={0} rtt={1} rto={2}",
-                        seg.sn, _itimediff(current_, seg.ts), rx_rto);
+                    Log(kLog.IN_DATA, $"input ack: sn={seg.sn} rtt={_itimediff(current_, seg.ts)} rto={rx_rto}");
                 } else if (seg.cmd == Cmd.IKCP_CMD_PUSH) {
-                    Log(IKCP_LOG_IN_DATA, "input psh: sn={0} ts={1}", seg.sn, seg.ts);
+                    Log(kLog.IN_DATA, $"input psh: sn={seg.sn} ts={seg.ts}");
                     if (_itimediff(seg.sn, rcv_nxt + rcv_wnd) < 0) {
-                        ACKPush(seg.sn, seg.ts);
+                        ackList.Add(seg.tssn);
                         if (_itimediff(seg.sn, rcv_nxt) >= 0) {//（可能是判断是否是冗余包！）这里需要搞清楚为什么要判断，因为上面实际上如果是有数据的话读取包头的时候就一并读取出来 到 Segment里面去了
-                            var seg1 = new Segment((int)seg.len);
-                            seg1.conv = seg.conv;
-                            seg1.cmd = seg.cmd;
-                            seg1.frg = seg.frg;
-                            seg1.wnd = seg.wnd;
-                            seg1.ts = seg.ts;
-                            seg1.sn = seg.sn;
-                            seg1.una = seg.una;
-                            if (seg.len > 0) {
-                                Buffer.BlockCopy(data.ToArray(), offset, seg1.data, 0, (int)seg.len);
-                            }
-                            ParseData(seg1);
+                            //var seg1 = new Segment((int)seg.len);
+                            //seg1.conv = seg.conv;
+                            //seg1.cmd = seg.cmd;
+                            //seg1.frg = seg.frg;
+                            //seg1.wnd = seg.wnd;
+                            //seg1.ts = seg.ts;
+                            //seg1.sn = seg.sn;
+                            //seg1.una = seg.una;
+                            //if (seg.len > 0) {
+                            //    Buffer.BlockCopy(data.ToArray(), offset, seg1.data, 0, (int)seg.len);
+                            //}
+                            ParseData(seg);
                         }
                     }
                 } else if (seg.cmd == Cmd.IKCP_CMD_WASK) {//如果收到的包是远端发过来询问窗口大小的包
                     // ready to send back IKCP_CMD_WINS in ikcp_flush
                     // tell remote my window size
-                    probe |= IKCP_ASK_TELL;
-                    Log(IKCP_LOG_IN_PROBE, "input probe");
+                    probe |= Porbe.IKCP_ASK_TELL;
+                    Log(kLog.IN_PROBE, "input probe");
                 } else if (seg.cmd == Cmd.IKCP_CMD_WINS) {
                     // do nothing
-                    Log(IKCP_LOG_IN_WINS, "input wins: {seg.wnd}");
+                    Log(kLog.IN_WINS, "input wins: {seg.wnd}");
                 } else {
                     return -3;
                 }
@@ -257,7 +253,7 @@ namespace mkcp {
             if (flag)
                 ParseFastACK(maxack);
 
-            UInt32 unack = snd_una;
+            uint unack = snd_una;
             if (_itimediff(snd_una, unack) > 0 && cwnd < rmt_wnd) {
                 if (cwnd < ssthresh) {
                     cwnd++;
@@ -288,21 +284,20 @@ namespace mkcp {
 
             // 'ikcp_update' haven't been called.
             //检查 kcp->update 是否更新，未更新直接返回。 //kcp->update 由 ikcp_update 更新，// 上层应用需要每隔一段时间（10-100ms）调用 ikcp_update 来驱动 KCP 发送数据；
-            if (updated_ == 0) return;
+            if (!updated_) return;
 
             var seg = Segment.Create(conv, Cmd.IKCP_CMD_ACK, WndUnused(), rcv_nxt);
-            // flush acknowledges
-            int count = (int)ackcount_;
-            for (int i = 0; i < count; i++) {
+
+            //flush Ack(acknowledges)
+            for (int i = 0; i < ackList.Count; i++) {
                 if ((offset + IKCP_OVERHEAD) > mtu) {
                     output_(buffer, offset, user_);
                     offset = 0;
                 }
-                ACKGet(i, ref seg.Head.sn, ref seg.Head.ts);
+                seg.tssn = ackList[i];
                 seg.Encode(buffer, ref offset);
             }
-
-            ackcount_ = 0;
+            ackList.Clear();
 
             // probe window size (if remote window size equals zero)
             if (rmt_wnd == 0) {
@@ -317,7 +312,7 @@ namespace mkcp {
                         if (probe_wait_ > IKCP_PROBE_LIMIT)
                             probe_wait_ = IKCP_PROBE_LIMIT;
                         ts_probe_ = current_ + probe_wait_;
-                        probe |= IKCP_ASK_SEND;
+                        probe |= Porbe.IKCP_ASK_SEND;
                     }
                 }
             } else {
@@ -326,7 +321,7 @@ namespace mkcp {
             }
 
             // flush window probing commands
-            if ((probe & IKCP_ASK_SEND) > 0) {
+            if (probe.HasFlag(Porbe.IKCP_ASK_SEND)) {
                 seg.cmd = Cmd.IKCP_CMD_WASK;
                 if ((offset + IKCP_OVERHEAD) > mtu) {
                     output_(buffer, offset, user_);
@@ -336,7 +331,7 @@ namespace mkcp {
             }
 
             // flush window probing commands
-            if ((probe & IKCP_ASK_TELL) > 0) {
+            if (probe.HasFlag(Porbe.IKCP_ASK_TELL)) {
                 seg.cmd = Cmd.IKCP_CMD_WINS;
                 if ((offset + IKCP_OVERHEAD) > mtu) {
                     output_(buffer, offset, user_);
@@ -345,12 +340,11 @@ namespace mkcp {
                 seg.Encode(buffer, ref offset);
             }
 
-            probe = 0;
+            probe =  Porbe.Default;
 
             // calculate window size
-            UInt32 cwnd = _imin_(snd_wnd, rmt_wnd);
-            if (nocwnd_ == 0)
-                cwnd = _imin_(this.cwnd, cwnd);
+            var cwnd = _imin_(snd_wnd, rmt_wnd);
+            if (!nocwnd_)  cwnd = _imin_(this.cwnd, cwnd);
 
             // move data from snd_queue to snd_buf
             while (_itimediff(snd_nxt, snd_una + cwnd) < 0) {
@@ -359,7 +353,6 @@ namespace mkcp {
 
                 var newseg = snd_queue_.Dequeue();
                 snd_buf_.AddLast(newseg);
-                nsnd_buf++;
 
                 newseg.conv = conv;
                 newseg.cmd = Cmd.IKCP_CMD_PUSH;
@@ -374,8 +367,8 @@ namespace mkcp {
             }
 
             // calculate resent
-            UInt32 resent = (fastresend_ > 0 ? (UInt32)fastresend_ : 0xffffffff);
-            UInt32 rtomin = (nodelay_ == 0 ? (UInt32)(rx_rto >> 3) : 0);
+            uint resent = (fastresend_ > 0 ? (uint)fastresend_ : 0xffffffff);
+            uint rtomin = (!nodelay_ ? (uint)(rx_rto >> 3) : 0);
 
             // flush data segments
             for (var node = snd_buf_.First; node != null; node = node.Next) {
@@ -390,10 +383,7 @@ namespace mkcp {
                     needsend = 1;
                     segment.xmit++;
                     xmit_++;
-                    if (nodelay_ == 0)
-                        segment.rto += (uint)rx_rto;
-                    else
-                        segment.rto += (uint)rx_rto / 2;
+                    segment.rto += nodelay_ ? (uint)rx_rto / 2 : (uint)rx_rto;
                     segment.resendts = current_ + segment.rto;
                     lost = 1;
                 } else if (segment.fastack >= resent) {
@@ -410,17 +400,17 @@ namespace mkcp {
                     segment.una = rcv_nxt;
 
                     int need = IKCP_OVERHEAD;
-                    if (segment.data != null)
-                        need += segment.data.Length;
+                    if (!segment.Data.IsEmpty)
+                        need += segment.Data.Length;
 
                     if (offset + need > mtu) {
                         output_(buffer, offset, user_);
                         offset = 0;
                     }
                     segment.Encode(buffer, ref offset);
-                    if (segment.data.Length > 0) {
-                        Buffer.BlockCopy(segment.data, 0, buffer, offset, segment.data.Length);
-                        offset += segment.data.Length;
+                    if (segment.Data.Length > 0) {
+                        Buffer.BlockCopy(segment.Data.ToArray(), 0, buffer, offset, segment.Data.Length);
+                        offset += segment.Data.Length;
                     }
                     if (segment.xmit >= dead_link_)
                         state = 0xffffffff;
@@ -435,7 +425,7 @@ namespace mkcp {
 
             // update ssthresh
             if (change > 0) {
-                UInt32 inflight = snd_nxt - snd_una;
+                uint inflight = snd_nxt - snd_una;
                 ssthresh = inflight / 2;
                 if (ssthresh < IKCP_THRESH_MIN)
                     ssthresh = IKCP_THRESH_MIN;

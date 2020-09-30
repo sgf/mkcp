@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Buffers;
+using System.Linq.Expressions;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -8,88 +9,87 @@ namespace mkcp {
 
     public partial class Kcp {
 
-        internal enum Cmd : byte {
-            /// <summary>
-            /// cmd: push data
-            /// </summary>
-            IKCP_CMD_PUSH = 81,
-            /// <summary>
-            /// cmd: ack
-            /// </summary>
-            IKCP_CMD_ACK = 82,
-            /// <summary>
-            /// cmd: window probe (ask) 询问对方当前剩余窗口大小 请求
-            /// </summary>
-            IKCP_CMD_WASK = 83,
-            /// <summary>
-            /// cmd: window size (tell) 返回本地当前剩余窗口大小
-            /// </summary>
-            IKCP_CMD_WINS = 84,
-        }
 
 
-        [StructLayout(LayoutKind.Sequential, Pack = 1)]
+
+        [StructLayout(LayoutKind.Explicit, Pack = 1)]
         internal struct SegmentHead {
+            /// <summary>
+            /// 会话ID 仅仅用于 类似会话通道标记的功能，而不是用来作为SessionId标记（虽然也可以但是太浪费）
+            /// </summary>
+            [FieldOffset(0)]
             internal uint conv;
+            [FieldOffset(4)]
             internal Cmd cmd;
+            [FieldOffset(5)]
             internal byte frg;
+            [FieldOffset(6)]
             internal ushort wnd;
+            [FieldOffset(8)]
             internal uint ts;
+            [FieldOffset(12)]
             internal uint sn;
+            /// <summary>
+            /// ts-sn联合字段 便于存储（缓存ACK信息）
+            /// </summary>
+            [FieldOffset(8)]
+            internal ulong tssn;
+            [FieldOffset(16)]
             internal uint una;
+            [FieldOffset(20)]
             internal uint len;
         }
 
         internal unsafe class Segment : IDisposable {
 
             #region 网络传输部分
-            internal SegmentHead* Head;
+            private ref SegmentHead Head => ref Unsafe.As<byte, SegmentHead>(ref DataAll.Span[0]);
 
             /// <summary>
             /// 会话id
             /// </summary>
-            internal uint conv { get { return Head->conv; } set { Head->conv = value; } }
+            internal ref uint conv => ref Head.conv;
 
             /// <summary>
             /// 协议命令
             /// </summary>
-            internal Cmd cmd { get { return Head->cmd; } set { Head->cmd = value; } }
+            internal ref Cmd cmd => ref Head.cmd;
 
             /// <summary>
             /// message中的segment分片ID（在message中的索引，由大到小，0表示最后一个分片）
             /// </summary>
-            internal byte frg { get { return Head->frg; } set { Head->frg = value; } }
+            internal ref byte frg => ref Head.frg;
 
             /// <summary>
             /// 剩余接收窗口大小(接收窗口大小-接收队列大小)
             /// </summary>
-            internal ushort wnd { get { return Head->wnd; } set { Head->wnd = value; } }
+            internal ref ushort wnd => ref Head.wnd;
 
             /// <summary>
             /// message发送时刻的时间戳
             /// </summary>
-            internal uint ts { get { return Head->ts; } set { Head->ts = value; } }
+            internal ref uint ts => ref Head.ts;
 
             /// <summary>
             /// message分片segment的序号
             /// </summary>
-            internal uint sn { get { return Head->sn; } set { Head->sn = value; } }
+            internal ref uint sn => ref Head.sn;
+
+
+            /// <summary>
+            /// ts-sn联合字段 便于存储(Ack列表)
+            /// </summary>
+            internal ref ulong tssn => ref Head.tssn;
 
             /// <summary>
             /// 待接收消息序号(接收滑动窗口左端)
             /// </summary>
-            internal uint una { get { return Head->una; } set { Head->una = value; } }
+            internal ref uint una => ref Head.una;
 
             /// <summary>
             /// 包长
             /// </summary>
-            internal uint len { get { return Head->len; } set { Head->len = value; } }
-
-            /// <summary>
-            /// 数据包本体（如果携带数据的话）
-            /// </summary>
-            internal byte[] data { get; set; }
-
+            internal ref uint len => ref Head.len;
 
             #endregion
 
@@ -131,24 +131,53 @@ namespace mkcp {
             /// </summary>
             public readonly Memory<byte> Data;
 
+            /// <summary>
+            /// 用于创建不带数据的空包
+            /// </summary>
             private Segment() {
-                LengthAll = sizeof(SegmentHead);
+                LengthAll = IKCP_OVERHEAD;
                 mower = MemoryPool<byte>.Shared.Rent(LengthAll);
                 DataAll = mower.Memory.Slice(0, LengthAll);
                 Data = Memory<byte>.Empty;
-                this.len = (uint)(DataAll.Length - Kcp.IKCP_OVERHEAD);
+                this.len = (uint)Kcp.IKCP_OVERHEAD;
             }
 
-            private Segment(Span<byte> data, int fragmentId = 0) {
-                LengthAll = sizeof(SegmentHead) + data.Length;
+            //if (allData.IsEmpty || allData.Length < IKCP_OVERHEAD) throw new ArgumentOutOfRangeException("allData 不能为空 且长度不能小于包头");、
+
+            /// <summary>
+            /// 用于创建带数据的包
+            /// </summary>
+            /// <param name="data"></param>
+            /// <param name="fragmentId"></param>
+            private Segment(Span<byte> data, int fragmentId) {
+                LengthAll = IKCP_OVERHEAD + data.Length;
                 mower = MemoryPool<byte>.Shared.Rent(LengthAll);
                 DataAll = mower.Memory.Slice(0, LengthAll);
-                Data = data.IsEmpty ? Memory<byte>.Empty : mower.Memory.Slice(Kcp.IKCP_OVERHEAD, data.Length);
+                Data = DataAll.Slice(Kcp.IKCP_OVERHEAD, data.Length);
+                data.CopyTo(Data.Span);
+
                 this.len = (uint)(DataAll.Length - Kcp.IKCP_OVERHEAD);
                 if (fragmentId > 0)
                     this.frg = (byte)fragmentId;
             }
 
+            /// <summary>
+            /// 用于解析
+            /// </summary>
+            /// <param name="allData"></param>
+            private Segment(Span<byte> allData) {
+                LengthAll = allData.Length;
+                var dataLen = allData.Length - IKCP_OVERHEAD;
+                mower = MemoryPool<byte>.Shared.Rent(LengthAll);
+                DataAll = mower.Memory.Slice(0, LengthAll);
+                allData.CopyTo(DataAll.Span);
+                if (dataLen == 0)
+                    Data = Memory<byte>.Empty;
+                else
+                    Data = DataAll.Slice(Kcp.IKCP_OVERHEAD, dataLen);//无需Copy数据了因为DataAll中已经包含了所有数据
+
+
+            }
 
             /// <summary>
             /// 带数据的
@@ -157,6 +186,10 @@ namespace mkcp {
             /// <returns></returns>
             internal static Segment Create(Span<byte> data, int fragmentId = 0) => new Segment(data, fragmentId);
 
+            /// <summary>
+            /// 空包
+            /// </summary>
+            /// <returns></returns>
             internal static Segment Create() => new Segment();
 
             internal static Segment Create(uint conv, Cmd cmd, int wndUnUsed, uint rcv_nxt) {
@@ -168,9 +201,12 @@ namespace mkcp {
                 return sg;
             }
 
+
+            internal static Segment Prase(Span<byte> allData) => new Segment(allData);
+
             //MemoryMarshal.Cast<byte, SegmentHead>(ptr.AsSpan())[0] = Head; Unsafe.Copy<SegmentHead>(Unsafe.AsPointer(ref ptr.AsSpan()[0]), ref Head);
             internal unsafe void Encode(Span<byte> ptr, ref int offset) {
-                data.CopyTo(ptr.Slice(Kcp.IKCP_OVERHEAD));
+                //data.CopyTo(ptr.Slice(Kcp.IKCP_OVERHEAD));
                 DataAll.Span.CopyTo(ptr);
                 offset += DataAll.Length;
             }
@@ -194,11 +230,9 @@ namespace mkcp {
                 var reamainData = pkdata.Slice(Kcp.IKCP_OVERHEAD);
                 if (reamainData.Length < head.len) return false;//剩下的数据长度不足
 
-                //seg = new Segment();
-                //seg.Head = &head;
                 //seg.data = head.len == 0 ? Array.Empty<byte>() :
                 //    reamainData.Slice(0, (int)head.len).ToArray();
-                seg = Create(pkdata);
+                seg = Prase(pkdata);
 
                 offset += (int)head.len;
                 return true;

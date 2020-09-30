@@ -10,7 +10,6 @@ namespace mkcp {
         // output callback can be setup like this: 'kcp->output = my_udp_output'
         public Kcp(uint conv, object user) {
             Debug.Assert(BitConverter.IsLittleEndian); // we only support little endian device
-
             user_ = user;
             this.conv = conv;
             snd_wnd = IKCP_WND_SND;
@@ -29,6 +28,7 @@ namespace mkcp {
             rcv_queue_ = new LinkedList<Segment>();
             snd_buf_ = new LinkedList<Segment>();
             rcv_buf_ = new LinkedList<Segment>();
+            ackList = new List<ulong>();
         }
 
         // release kcp control object
@@ -37,13 +37,8 @@ namespace mkcp {
             rcv_buf_.Clear();
             snd_queue_.Clear();
             rcv_queue_.Clear();
-            nrcv_buf_ = 0;
-            nsnd_buf = 0;
-            nrcv_que_ = 0;
-            ackblock_ = 0;
-            ackcount_ = 0;
+            ackList.Clear();
             buffer = null;
-            acklist_ = null;
         }
 
         // set output callback, which will be invoked by kcp
@@ -59,15 +54,15 @@ namespace mkcp {
             var node = rcv_queue_.First;
             var seg = node.Value;
             if (seg.frg == 0)
-                return seg.data.Length;
+                return seg.Data.Length;
 
-            if (nrcv_que_ < seg.frg + 1)
+            if (rcv_queue_.Count < seg.frg + 1)
                 return -1;
 
             int length = 0;
             for (node = rcv_queue_.First; node != null; node = node.Next) {
                 seg = node.Value;
-                length += seg.data.Length;
+                length += seg.Data.Length;
                 if (seg.frg == 0)
                     break;
             }
@@ -75,12 +70,12 @@ namespace mkcp {
         }
 
         // parse ack
-        void UpdateACK(Int32 rtt) {
+        void UpdateACK(int rtt) {
             if (rx_srtt == 0) {
                 rx_srtt = rtt;
                 rx_rttval = rtt / 2;
             } else {
-                Int32 delta = rtt - rx_srtt;
+                int delta = rtt - rx_srtt;
                 if (delta < 0)
                     delta = -delta;
 
@@ -91,7 +86,7 @@ namespace mkcp {
             }
 
             var rto = rx_srtt + _imax_(interval_, (uint)(4 * rx_rttval));
-            rx_rto = (Int32)_ibound_((uint)rx_minrto, (uint)rto, IKCP_RTO_MAX);
+            rx_rto = (int)_ibound_((uint)rx_minrto, (uint)rto, IKCP_RTO_MAX);
         }
 
         /// <summary>
@@ -122,7 +117,6 @@ namespace mkcp {
                 next = node.Next;
                 if (sn == seg.sn) {
                     snd_buf_.Remove(node);
-                    nsnd_buf--;
                     break;
                 }
                 if (_itimediff(sn, seg.sn) < 0)
@@ -148,7 +142,6 @@ namespace mkcp {
                 next = node.Next;
                 if (_itimediff(una, seg.sn) > 0) {
                     snd_buf_.Remove(node);
-                    nsnd_buf--;
                 } else {
                     break;
                 }
@@ -169,40 +162,6 @@ namespace mkcp {
                     seg.fastack++;
                 }
             }
-        }
-
-        // ack append
-        /// <summary>
-        /// push当前包的ack给远端（会在flush中发送ack出去)
-        /// 调用 ikcp_ack_push 将对该报文的确认 ACK 报文放入 ACK 列表acklist中
-        /// </summary>
-        /// <param name="sn"></param>
-        /// <param name="ts"></param>
-        void ACKPush(uint sn, uint ts) {
-            var newsize = ackcount_ + 1;
-            if (newsize > ackblock_) {//太小因此扩容
-                uint newblock = 8;
-                for (; newblock < newsize; newblock <<= 1) // newblock <<= 1 等价于 newblock *= 2;
-                    ;
-
-                var acklist = new uint[newblock * 2];
-                if (acklist_ != null) {
-                    for (var i = 0; i < ackcount_; i++) {
-                        acklist[i * 2] = acklist_[i * 2];
-                        acklist[i * 2 + 1] = acklist_[i * 2 + 1];
-                    }
-                }
-                acklist_ = acklist;
-                ackblock_ = newblock;
-            }
-            acklist_[ackcount_ * 2] = sn;
-            acklist_[ackcount_ * 2 + 1] = ts;
-            ackcount_++;
-        }
-
-        void ACKGet(int pos, ref uint sn, ref uint ts) {
-            sn = acklist_[pos * 2];
-            ts = acklist_[pos * 2 + 1];
         }
 
         // parse data
@@ -234,18 +193,15 @@ namespace mkcp {
                 } else {
                     rcv_buf_.AddFirst(newseg);
                 }
-                nrcv_buf_++;
             }
 
             // move available data from rcv_buf -> rcv_queue
             while (rcv_buf_.Count > 0) {
                 node = rcv_buf_.First;
                 var seg = node.Value;
-                if (seg.sn == rcv_nxt && nrcv_que_ < rcv_wnd) {
+                if (seg.sn == rcv_nxt && rcv_queue_.Count < rcv_wnd) {
                     rcv_buf_.Remove(node);
-                    nrcv_buf_--;
                     rcv_queue_.AddLast(node);
-                    nrcv_que_++;
                     rcv_nxt++;
                 } else {
                     break;
@@ -254,8 +210,8 @@ namespace mkcp {
         }
 
         int WndUnused() {
-            if (nrcv_que_ < rcv_wnd)
-                return (int)(rcv_wnd - nrcv_que_);
+            if (rcv_queue_.Count < rcv_wnd)
+                return (int)(rcv_wnd - rcv_queue_.Count);
             return 0;
         }
 
@@ -274,14 +230,14 @@ namespace mkcp {
 
 
         // get how many packet is waiting to be sent
-        public int WaitSnd => snd_buf_.Count + snd_queue_.Count;// (int)(nsnd_buf + nsnd_que_);
+        public int WaitSnd => snd_buf_.Count + snd_queue_.Count;
         // read conv
         public uint GetConv() => conv;
 
         public uint GetState() => state;
 
 
-        void Log(int mask, string format, params object[] args) {
+        void Log(kLog mask, string format, params object[] args) {
             // Console.WriteLine(mask + String.Format(format, args));
         }
     }
