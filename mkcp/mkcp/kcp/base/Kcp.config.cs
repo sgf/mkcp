@@ -4,7 +4,7 @@ namespace mkcp {
     public partial class Kcp {
 
         /// <summary>
-        ///
+        /// 创建Kcp对象
         /// </summary>
         /// <param name="fastMode">是否为快速工作模式</param>
         /// <returns></returns>
@@ -90,7 +90,7 @@ namespace mkcp {
                 return false;
             var buffer = new byte[(mtu + IKCP_OVERHEAD) * 3];
             this.mtu = (uint)mtu;
-            mss = this.mtu - IKCP_OVERHEAD;
+            mss = this.mtu - (uint)IKCP_OVERHEAD;
             this.buffer = buffer;
             return true;
         }
@@ -112,5 +112,12 @@ namespace mkcp {
         /// </remarks>
         /// <param name="resend"></param>
         public void SetFastResend(int resend) => fastresend_ = resend;
+
+
+        /// <summary>
+        /// SendMax=255*mss , mss=(mtu-包头)
+        /// </summary>
+        public int SendMax => byte.MaxValue * (int)mss;
+
     }
 }

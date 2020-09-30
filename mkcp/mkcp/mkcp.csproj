@@ -13,11 +13,20 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="kcp\mgr\Kcp.SessionMgr.cs" />
+    <Compile Remove="kcp\mgr\KcpClient.cs" />
+    <Compile Remove="kcp\mgr\KcpSession.cs" />
+    <Compile Remove="kcp\mgr\KcpSocket.cs" />
+    <Compile Remove="kcp\mgr\KcpSvr.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Nito.AsyncEx" Version="5.0.0" />
   </ItemGroup>
 
   <ItemGroup>
     <Folder Include="kcp\fec\" />
+    <Folder Include="kcp\mgr\" />
   </ItemGroup>
 
 </Project>

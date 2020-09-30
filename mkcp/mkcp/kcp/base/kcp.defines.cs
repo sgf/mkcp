@@ -16,6 +16,7 @@ namespace mkcp {
     ///
     /// </summary>
     public partial class Kcp {
+
         /// <summary>
         /// no delay min rto
         /// </summary>
@@ -62,7 +63,8 @@ namespace mkcp {
         /// <summary>
         /// Kcp包头大小
         /// </summary>
-        public const int IKCP_OVERHEAD = 24;
+        public unsafe static int IKCP_OVERHEAD => sizeof(SegmentHead);
+
         /// <summary>
         /// 死连接 重传达到该值时认为连接是断开的
         /// </summary>
@@ -198,10 +200,12 @@ namespace mkcp {
         /// 接收队列rcv_queue中的Segment数量, 需要小于 rcv_wnd
         /// </summary>
         uint nrcv_que_ { get; set; } = 0;
-        /// <summary>
-        /// 发送队列snd_queue中的Segment数量
-        /// </summary>
-        uint nsnd_que_ { get; set; } = 0;
+
+        ///// <summary>
+        ///// 发送队列snd_queue中的Segment数量
+        ///// </summary>
+        //uint nsnd_que_ => (uint)snd_queue_.Count;
+
         /// <summary>
         /// 是否启动无延迟模式。无延迟模式rtomin将设置为0，拥塞控制不启动；
         /// </summary>

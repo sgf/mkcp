@@ -5,41 +5,41 @@ using System.Diagnostics;
 namespace mkcp {
     public partial class Kcp {
 
-        // user/upper level send, returns below zero for error
-        public int Send(Span<byte> buffer, int offset, int len) {
-            Debug.Assert(mss > 0);
-            if (len < 0)
-                return -1;
-
-            //
-            // not implement streaming mode here as ikcp.c
-            //
-
-            int count = 0;
-            if (len <= (int)mss)
-                count = 1;
-            else
-                count = (len + (int)mss - 1) / (int)mss;
-
-            if (count > 255) // maximum value `frg` can present
-                return -2;
-
-            if (count == 0)
-                count = 1;
-
-            // fragment/数据分段
-            for (int i = 0; i < count; i++) {
-                int size = len > (int)mss ? (int)mss : len;
-                var seg = new Segment(size);
-                if (buffer != null && len > 0) {
-                    Buffer.BlockCopy(buffer.ToArray(), offset, seg.data, 0, size);
-                    offset += size;
-                }
-                seg.frg = (byte)(count - i - 1);
-                snd_queue_.Enqueue(seg);
-                nsnd_que_++;
-                len -= size;
+        /// <summary>
+        /// user/upper level send, returns below zero for error
+        /// </summary>
+        /// <remarks>
+        /// 注意：函数不支持 发送超过 <see cref="SendMax"/> 大小的数据包
+        /// 注意：内部删除了Stream流模式的传输（not implement streaming mode here as ikcp.c）
+        /// </remarks>
+        /// <param name="buffer"></param>
+        /// <returns></returns>
+        public int Send(Span<byte> buffer) {
+            if (buffer.IsEmpty) {//发送空包
+                snd_queue_.Enqueue(Segment.Create()); return 0;
             }
+            if (buffer.Length > SendMax) return -2;//超过发送限制
+            if (buffer.Length <= mss) {//小于mss的小包直接发送  这段本来可以和下面合并，但为了小包的性能,所以提前处理掉。
+                snd_queue_.Enqueue(Segment.Create(buffer.Slice(0, buffer.Length), 0)); return 0;
+            }
+
+            int offset = 0;
+            int remaind;//超出整包部分长度。
+            var fullCount = Math.DivRem(buffer.Length, (int)mss, out remaind);//fullCount:完整包数量 如果有，返回整数倍，否则会返回0。
+            var remaindCount = (remaind > 0 ? 1 : 0);
+            var totalCount = fullCount + remaindCount;
+
+            //分片逻辑（范围255-0,从大到小）
+
+            //分片完整包
+            for (int i = totalCount; i >= remaindCount; i--) {
+                snd_queue_.Enqueue(Segment.Create(buffer.Slice(offset, (int)mss), i));
+                offset += (int)mss;
+            }
+            //分片剩余
+            if (remaindCount > 0)
+                snd_queue_.Enqueue(Segment.Create(buffer.Slice(offset, (int)remaind), 0));//
+
             return 0;
         }
 
@@ -359,7 +359,6 @@ namespace mkcp {
 
                 var newseg = snd_queue_.Dequeue();
                 snd_buf_.AddLast(newseg);
-                nsnd_que_--;
                 nsnd_buf++;
 
                 newseg.conv = conv;

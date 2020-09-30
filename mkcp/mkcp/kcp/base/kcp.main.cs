@@ -17,7 +17,7 @@ namespace mkcp {
             rcv_wnd = IKCP_WND_RCV;
             rmt_wnd = IKCP_WND_RCV;
             mtu = IKCP_MTU_DEF;
-            mss = mtu - IKCP_OVERHEAD;
+            mss = mtu - (uint)IKCP_OVERHEAD;
             rx_rto = IKCP_RTO_DEF;
             rx_minrto = IKCP_RTO_MIN;
             interval_ = IKCP_INTERVAL;
@@ -40,7 +40,6 @@ namespace mkcp {
             nrcv_buf_ = 0;
             nsnd_buf = 0;
             nrcv_que_ = 0;
-            nsnd_que_ = 0;
             ackblock_ = 0;
             ackcount_ = 0;
             buffer = null;
@@ -275,7 +274,7 @@ namespace mkcp {
 
 
         // get how many packet is waiting to be sent
-        public int WaitSnd() => (int)(nsnd_buf + nsnd_que_);
+        public int WaitSnd => snd_buf_.Count + snd_queue_.Count;// (int)(nsnd_buf + nsnd_que_);
         // read conv
         public uint GetConv() => conv;
 

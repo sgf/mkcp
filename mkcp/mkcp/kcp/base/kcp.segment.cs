@@ -8,7 +8,6 @@ namespace mkcp {
 
     public partial class Kcp {
 
-
         internal enum Cmd : byte {
             /// <summary>
             /// cmd: push data
@@ -114,21 +113,40 @@ namespace mkcp {
             /// </summary>
             public uint xmit { get; set; }
 
-
+            /// <summary>
+            /// 内存持有对象，用于释放持有的内存，从而回归到内存池（使用Dispose函数）
+            /// </summary>
             private readonly IMemoryOwner<byte> mower;
+            /// <summary>
+            /// 包括了Head头部
+            /// </summary>
+            public readonly Memory<byte> DataAll;
+            /// <summary>
+            /// 包括了Head头部的长度
+            /// </summary>
+            internal readonly int LengthAll;
+
+            /// <summary>
+            /// 不包含Head头部
+            /// </summary>
             public readonly Memory<byte> Data;
 
             private Segment() {
-                var allSize = sizeof(SegmentHead);
-                mower = MemoryPool<byte>.Shared.Rent(allSize);
-                Data = mower.Memory.Slice(0, allSize);
+                LengthAll = sizeof(SegmentHead);
+                mower = MemoryPool<byte>.Shared.Rent(LengthAll);
+                DataAll = mower.Memory.Slice(0, LengthAll);
+                Data = Memory<byte>.Empty;
+                this.len = (uint)(DataAll.Length - Kcp.IKCP_OVERHEAD);
             }
 
-            private Segment(Span<byte> data) {
-                var allSize = sizeof(SegmentHead) + data.Length;
-                mower = MemoryPool<byte>.Shared.Rent(allSize);
-                Data = mower.Memory.Slice(0, allSize);
-                this.len=
+            private Segment(Span<byte> data, int fragmentId = 0) {
+                LengthAll = sizeof(SegmentHead) + data.Length;
+                mower = MemoryPool<byte>.Shared.Rent(LengthAll);
+                DataAll = mower.Memory.Slice(0, LengthAll);
+                Data = data.IsEmpty ? Memory<byte>.Empty : mower.Memory.Slice(Kcp.IKCP_OVERHEAD, data.Length);
+                this.len = (uint)(DataAll.Length - Kcp.IKCP_OVERHEAD);
+                if (fragmentId > 0)
+                    this.frg = (byte)fragmentId;
             }
 
 
@@ -137,10 +155,7 @@ namespace mkcp {
             /// </summary>
             /// <param name="data"></param>
             /// <returns></returns>
-            internal static Segment Create(Span<byte> data) {
-                var sg = new Segment(data);
-                return sg;
-            }
+            internal static Segment Create(Span<byte> data, int fragmentId = 0) => new Segment(data, fragmentId);
 
             internal static Segment Create() => new Segment();
 
@@ -155,10 +170,9 @@ namespace mkcp {
 
             //MemoryMarshal.Cast<byte, SegmentHead>(ptr.AsSpan())[0] = Head; Unsafe.Copy<SegmentHead>(Unsafe.AsPointer(ref ptr.AsSpan()[0]), ref Head);
             internal unsafe void Encode(Span<byte> ptr, ref int offset) {
-                offset += Kcp.IKCP_OVERHEAD;
                 data.CopyTo(ptr.Slice(Kcp.IKCP_OVERHEAD));
-                Data.Span.CopyTo(ptr);
-                offset += Data.Length;
+                DataAll.Span.CopyTo(ptr);
+                offset += DataAll.Length;
             }
 
             internal static bool TryRead(Span<byte> pkdata, ref int offset, out Segment seg, uint conv) {
@@ -202,22 +216,22 @@ namespace mkcp {
 
         }
 
-        internal static (bool isbad, uint conv) IsBadHeadFormat(Span<byte> pk) {
-            //有三种结果:
-            //1.包不合法，丢弃+拉黑
-            if (pk.Length < Kcp.IKCP_OVERHEAD) { //包数据太小
-                                                 //logger?.LogInformation($"Client:{kcpSession.IP} duplicate,cant Add to Session list!");
-                return (true, 0);
-            }
-            var dataSize = pk.Length - Kcp.IKCP_OVERHEAD;
-            ref var segHead = ref pk.Read<Kcp.SegmentHead>();
-            if (dataSize < segHead->len //Data数据太小
-               || segHead->cmd < Cmd.IKCP_CMD_PUSH || segHead->cmd > Cmd.IKCP_CMD_WINS) { //cmd命令不存在
-                                                                                          //logger?.LogInformation($"Client:{kcpSession.IP} duplicate,cant Add to Session list!");
-                return (true, segHead->conv);
-            }
-            return (false, segHead->conv);
-        }
+        //internal static (bool isbad, uint conv) IsBadHeadFormat(Span<byte> pk) {
+        //    //有三种结果:
+        //    //1.包不合法，丢弃+拉黑
+        //    if (pk.Length < Kcp.IKCP_OVERHEAD) { //包数据太小
+        //                                         //logger?.LogInformation($"Client:{kcpSession.IP} duplicate,cant Add to Session list!");
+        //        return (true, 0);
+        //    }
+        //    var dataSize = pk.Length - Kcp.IKCP_OVERHEAD;
+        //    ref var segHead = ref pk.Read<Kcp.SegmentHead>();
+        //    if (dataSize < segHead->len //Data数据太小
+        //       || segHead->cmd < Cmd.IKCP_CMD_PUSH || segHead->cmd > Cmd.IKCP_CMD_WINS) { //cmd命令不存在
+        //                                                                                  //logger?.LogInformation($"Client:{kcpSession.IP} duplicate,cant Add to Session list!");
+        //        return (true, segHead->conv);
+        //    }
+        //    return (false, segHead->conv);
+        //}
     }
 
 
