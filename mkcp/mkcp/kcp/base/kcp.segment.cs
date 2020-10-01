@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Buffers;
-using System.Linq.Expressions;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -8,9 +7,6 @@ using System.Runtime.InteropServices;
 namespace mkcp {
 
     public partial class Kcp {
-
-
-
 
         [StructLayout(LayoutKind.Explicit, Pack = 1)]
         internal struct SegmentHead {
@@ -96,7 +92,7 @@ namespace mkcp {
             /// <summary>
             /// 下次超时重传的时间戳
             /// </summary>
-            public uint resendts { get; set; }
+            public uint resend_ts { get; set; }
 
             /// <summary>
             /// 该分片的超时重传等待时间
@@ -109,7 +105,7 @@ namespace mkcp {
             public int fastack { get; set; }
 
             /// <summary>
-            /// 发送分片的次数，每发送一次加一
+            /// segment累计发送次数，每发送一次加一
             /// </summary>
             public uint xmit { get; set; }
 
@@ -117,10 +113,12 @@ namespace mkcp {
             /// 内存持有对象，用于释放持有的内存，从而回归到内存池（使用Dispose函数）
             /// </summary>
             private readonly IMemoryOwner<byte> mower;
+
             /// <summary>
             /// 包括了Head头部
             /// </summary>
             public readonly Memory<byte> DataAll;
+
             /// <summary>
             /// 包括了Head头部的长度
             /// </summary>
@@ -184,14 +182,17 @@ namespace mkcp {
             /// </summary>
             /// <param name="data"></param>
             /// <returns></returns>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             internal static Segment Create(Span<byte> data, int fragmentId = 0) => new Segment(data, fragmentId);
 
             /// <summary>
             /// 空包
             /// </summary>
             /// <returns></returns>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             internal static Segment Create() => new Segment();
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             internal static Segment Create(uint conv, Cmd cmd, int wndUnUsed, uint rcv_nxt) {
                 var sg = new Segment();
                 sg.conv = conv;
@@ -202,15 +203,17 @@ namespace mkcp {
             }
 
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             internal static Segment Prase(Span<byte> allData) => new Segment(allData);
 
             //MemoryMarshal.Cast<byte, SegmentHead>(ptr.AsSpan())[0] = Head; Unsafe.Copy<SegmentHead>(Unsafe.AsPointer(ref ptr.AsSpan()[0]), ref Head);
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             internal unsafe void Encode(Span<byte> ptr, ref int offset) {
-                //data.CopyTo(ptr.Slice(Kcp.IKCP_OVERHEAD));
                 DataAll.Span.CopyTo(ptr);
                 offset += DataAll.Length;
             }
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             internal static bool TryRead(Span<byte> pkdata, ref int offset, out Segment seg, uint conv) {
                 seg = null;
                 //包数据太小 kcp包头一共24个字节, size减去IKCP_OVERHEAD即24个字节应该不小于len
@@ -241,6 +244,7 @@ namespace mkcp {
 
 
             private bool disposed = false;
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void Dispose() {
                 if (!disposed) {
                     disposed = true;

@@ -1,14 +1,10 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Net;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace mkcp {
 
 
-    public delegate void KcpSvrReceiveHandler(KcpSession session,Span<byte> data, IPEndPoint endPoint);
+    public delegate void KcpSvrReceiveHandler(KcpSession session, Span<byte> data, IPEndPoint endPoint);
 
     public class KcpSvr {
         private KcpSvr(IPEndPoint svrIpPort, bool autoOnService = true) {
@@ -27,8 +23,6 @@ namespace mkcp {
             SessionMgr.Update(obj);
         }
 
-
-        
         private void OnRawReceive(Span<byte> data, IPEndPoint endPoint) {
             //检查黑名单
             if (SessionMgr.InBad(endPoint)) return;
@@ -43,7 +37,7 @@ namespace mkcp {
             var buff = mem.Memory.ToArray();
             var rcnt = session.kcp.Recv(buff, 0, buff.Length);
             if (rcnt > 0)
-                OnKcpReceive?.Invoke(session,buff.AsSpan().Slice(0, rcnt), endPoint);
+                OnKcpReceive?.Invoke(session, buff.AsSpan().Slice(0, rcnt), endPoint);
         }
 
 
