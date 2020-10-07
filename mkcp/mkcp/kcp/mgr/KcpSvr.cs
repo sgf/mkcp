@@ -12,7 +12,7 @@ namespace mkcp {
             _sock = KcpSocket.CreateSvr(svrIpPort, OnRawReceive);
             SessionMgr.OnNew = this.OnNew; //SessionMgr_OnNew;
             SessionMgr.OnKick = this.OnKick; //SessionMgr_OnKick;
-            AutoOnService = autoOnService;//自动启动就是什么也不做就接收消息了。（否则，在接收到消息时 应该果断丢弃，这样客户端发过来的消息就得不到反馈，就意味着服务没有开启）
+            AutoOnService = autoOnService;
 
             _sock.OnUpdate += _sock_OnUpdate;
             _ = _sock.ReceiveAsyncLoop();
@@ -57,6 +57,9 @@ namespace mkcp {
         public event KickSessionHandler OnKick;
         private readonly KcpSessionManager SessionMgr;
         private readonly KcpSocket _sock;
+        /// <summary>
+        /// 自动启动就是什么也不做就接收消息了。（否则，在接收到消息时 应该果断丢弃，这样客户端发过来的消息就得不到反馈，就意味着服务没有开启）
+        /// </summary>
         private readonly bool AutoOnService;
         public static KcpSvr Start(string svrIpPort, bool autoOnService = true) {
             if (!IPEndPoint.TryParse(svrIpPort, out IPEndPoint ipport))

@@ -32,7 +32,7 @@ namespace mkcp {
             //分片逻辑（范围255-0,从大到小）
 
             //分片完整包
-            for (int i = totalCount; i >= remaindCount; i--) {
+            for (int i = totalCount; i > remaindCount; i--) {
                 snd_queue_.Enqueue(Segment.Create(buffer.Slice(offset, (int)mss), i));
                 offset += (int)mss;
             }

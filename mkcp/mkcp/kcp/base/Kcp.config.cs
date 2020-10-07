@@ -9,8 +9,8 @@ namespace mkcp {
         /// </summary>
         /// <param name="fastMode">是否为快速工作模式</param>
         /// <returns></returns>
-        public static Kcp Create(bool fastMode = true) {
-            var kcp = new Kcp(0, null);
+        public static Kcp Create(bool fastMode = true, object userData = null) {
+            var kcp = new Kcp(0, userData);
             if (!fastMode)
                 kcp.SetNoDelay(40, 0, false); //较快模式 ikcp_nodelay(kcp, 1, 40, 0, 0); 注意：此处Nodelay 值的判断已经全部删除掉，也就是说 默认都是 nodelay
             else
@@ -22,7 +22,11 @@ namespace mkcp {
         }
 
 
-        // set output callback, which will be invoked by kcp
+        /// <summary>
+        /// 设置Kcp输出函数(发送处理函数)
+        /// </summary>
+        /// <remarks>Kcp内部将会调用外部的发送操作</remarks>
+        /// <param name="output"></param>
         public void SetOutput(OutputDelegate output) => output_ = output;
 
 
@@ -92,6 +96,18 @@ namespace mkcp {
             this.buffer = mowner.Memory.Slice(0, buffSize);
             return true;
         }
+
+
+        public int SetInterval(int interval) {
+            if (interval > 5000)
+                interval = 5000;
+            else if (interval < 10)
+                interval = 10;
+
+            interval_ = (uint)interval;
+            return 0;
+        }
+
 
         /// <summary>
         /// 设置最小RTO。

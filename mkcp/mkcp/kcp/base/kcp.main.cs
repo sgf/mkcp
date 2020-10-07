@@ -207,16 +207,6 @@ namespace mkcp {
         }
 
 
-        public int Interval(int interval) {
-            if (interval > 5000)
-                interval = 5000;
-            else if (interval < 10)
-                interval = 10;
-
-            interval_ = (uint)interval;
-            return 0;
-        }
-
         // get how many packet is waiting to be sent
         public int WaitSnd => snd_buf_.Count + snd_queue_.Count;
         // read conv

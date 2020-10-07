@@ -1,0 +1,58 @@
+﻿UDP 在Windows上的问题：
+
+
+https://blog.csdn.net/u011017980/article/details/53907641/
+https://blog.csdn.net/CNHK1225/article/details/53199834
+
+
+
+在UDP通信过程中，如果客户端中途断开，服务器会收到一个SocketException，错误ID为10054，描述是“远程主机强迫关闭了一个现有的连接”，紧接着的事就可怕了，UDP服务终止监听，所有客户端都受到了影响。也就是说一个客户端引起的异常导致了整个系统的崩溃。
+
+
+
+找了好几天了。终于找到了解决办法。
+在初始化对象后设置属性如下：
+
+ uint IOC_IN = 0x80000000;
+                    uint IOC_VENDOR = 0x18000000;
+                    uint SIO_UDP_CONNRESET = IOC_IN | IOC_VENDOR | 12;
+                    ClientSocket.IOControl((int)SIO_UDP_CONNRESET, new byte[] {Convert.ToByte(false)}, null);
+
+
+Socket.IOControl 方法 (IOControlCode, Byte[], Byte[])
+
+使用 IOControlCode 枚举指定控制代码，为 Socket 设置低级操作模式。
+
+参数
+ioControlCode
+一个 IOControlCode 值，它指定要执行的操作的控制代码。
+
+optionInValue
+Byte 类型的数组，包含操作要求的输入数据。
+
+optionOutValue
+Byte 类型的数组，包含由操作返回的输出数据。
+
+
+
+
+
+返回值
+optionOutValue 参数中的字节数。
+
+UDP <wbr>远程主机强迫关闭了一个现有的连接。  异常
+异常类型	条件
+SocketException
+
+试图访问套接字时发生错误。有关更多信息，请参见备注部分。
+
+ObjectDisposedException
+
+Socket 已关闭。
+
+InvalidOperationException
+
+试图不使用 Blocking 属性更改阻止模式。
+
+UDP <wbr>远程主机强迫关闭了一个现有的连接。  备注
+此方法提供对 Socket 类的当前实例所基于的操作系统 Socket 的低级访问。有关更多信息，请参见 MSDN Library 中的 WSAIoctl 文档
