@@ -32,20 +32,20 @@ namespace mkcp {
             //分片逻辑（范围255-0,从大到小）
 
             //分片完整包
-            for (int i = totalCount; i >= remaindCount; i--) {
+            for (int i = totalCount; i > remaindCount; i--) {
                 snd_queue_.Enqueue(Segment.Create(buffer.Slice(offset, (int)mss), i));
                 offset += (int)mss;
             }
             //分片剩余
             if (remaindCount > 0)
-                snd_queue_.Enqueue(Segment.Create(buffer.Slice(offset, (int)remaind), 0));//
+                snd_queue_.Enqueue(Segment.Create(buffer.Slice(offset, (int)remaind), 0));
 
             return 0;
         }
 
         // user/upper level recv: returns size, returns below zero for EAGAIN
         public int Recv(byte[] buffer, int offset, int len) {
-            int ispeek = (len < 0 ? 1 : 0);
+            bool ispeek = (len < 0 ? true : false);
             int recover = 0;
 
             if (rcv_queue_.Count == 0)
@@ -81,7 +81,7 @@ namespace mkcp {
 
                 Log(kLog.RECV, "recv sn={0}", seg.sn);
 
-                if (ispeek == 0) {
+                if (!ispeek) {
                     rcv_queue_.Remove(node);
                 }
 
@@ -167,7 +167,7 @@ namespace mkcp {
 
             for (var node = snd_buf_.First; node != null; node = node.Next) {
                 var seg = node.Value;
-                int diff = _itimediff(seg.resendts, current);
+                int diff = _itimediff(seg.resend_ts, current);
                 if (diff <= 0)
                     return current;
 
@@ -274,12 +274,14 @@ namespace mkcp {
             return 0;
         }
 
+
+
         /// <summary>
         /// flush pending data
         /// </summary>
         void Flush() {
             int change = 0;// 标识快重传发生
-            int lost = 0; // 记录出现了报文丢失
+            bool lost = false; // 记录出现了报文丢失
             int offset = 0;
 
             // 'ikcp_update' haven't been called.
@@ -288,16 +290,19 @@ namespace mkcp {
 
             var seg = Segment.Create(conv, Cmd.IKCP_CMD_ACK, WndUnused(), rcv_nxt);
 
-            //flush Ack(acknowledges)
-            for (int i = 0; i < ackList.Count; i++) {
-                if ((offset + IKCP_OVERHEAD) > mtu) {
-                    output_(buffer, offset, user_);
-                    offset = 0;
+            //flush Ack(acknowledges)  把AckList(待发送的确认包列表)推送出去，这里可以考虑 把Ack内容 变成数据放在Data中发送出去（从而节约带宽）。
+            FlushAckList();
+            void FlushAckList() {
+                for (int i = 0; i < ackList.Count; i++) {
+                    if ((offset + IKCP_OVERHEAD) > mtu) {
+                        output_(buffer.Span.Slice(0, offset), user_);
+                        offset = 0;
+                    }
+                    seg.tssn = ackList[i];
+                    seg.Encode(buffer.Span.Slice(offset), ref offset);
                 }
-                seg.tssn = ackList[i];
-                seg.Encode(buffer, ref offset);
+                ackList.Clear();
             }
-            ackList.Clear();
 
             // probe window size (if remote window size equals zero)
             if (rmt_wnd == 0) {
@@ -324,27 +329,27 @@ namespace mkcp {
             if (probe.HasFlag(Porbe.IKCP_ASK_SEND)) {
                 seg.cmd = Cmd.IKCP_CMD_WASK;
                 if ((offset + IKCP_OVERHEAD) > mtu) {
-                    output_(buffer, offset, user_);
+                    output_(buffer.Span.Slice(0, offset), user_);
                     offset = 0;
                 }
-                seg.Encode(buffer, ref offset);
+                seg.Encode(buffer.Span.Slice(offset), ref offset);
             }
 
             // flush window probing commands
             if (probe.HasFlag(Porbe.IKCP_ASK_TELL)) {
                 seg.cmd = Cmd.IKCP_CMD_WINS;
                 if ((offset + IKCP_OVERHEAD) > mtu) {
-                    output_(buffer, offset, user_);
+                    output_(buffer.Span.Slice(0, offset), user_);
                     offset = 0;
                 }
-                seg.Encode(buffer, ref offset);
+                seg.Encode(buffer.Span.Slice(offset), ref offset);
             }
 
-            probe =  Porbe.Default;
+            probe = Porbe.Default;
 
             // calculate window size
             var cwnd = _imin_(snd_wnd, rmt_wnd);
-            if (!nocwnd_)  cwnd = _imin_(this.cwnd, cwnd);
+            if (!nocwnd_) cwnd = _imin_(this.cwnd, cwnd);
 
             // move data from snd_queue to snd_buf
             while (_itimediff(snd_nxt, snd_una + cwnd) < 0) {
@@ -360,80 +365,74 @@ namespace mkcp {
                 newseg.ts = current_;
                 newseg.sn = snd_nxt++;
                 newseg.una = rcv_nxt;
-                newseg.resendts = current_;
-                newseg.rto = (uint)rx_rto;
+                newseg.resend_ts = current_;
+                newseg.rto = rx_rto;
                 newseg.fastack = 0;
                 newseg.xmit = 0;
             }
 
-            // calculate resent
-            uint resent = (fastresend_ > 0 ? (uint)fastresend_ : 0xffffffff);
-            uint rtomin = (!nodelay_ ? (uint)(rx_rto >> 3) : 0);
 
             // flush data segments
             for (var node = snd_buf_.First; node != null; node = node.Next) {
                 var segment = node.Value;
-                int needsend = 0;
-                if (segment.xmit == 0) {
-                    needsend = 1;
-                    segment.xmit++;
-                    segment.rto = (uint)rx_rto;
-                    segment.resendts = current_ + segment.rto + rtomin;
-                } else if (_itimediff(current_, segment.resendts) >= 0) {
-                    needsend = 1;
-                    segment.xmit++;
-                    xmit_++;
-                    segment.rto += nodelay_ ? (uint)rx_rto / 2 : (uint)rx_rto;
-                    segment.resendts = current_ + segment.rto;
-                    lost = 1;
-                } else if (segment.fastack >= resent) {
-                    needsend = 1;
-                    segment.xmit++;
-                    segment.fastack = 0;
-                    segment.resendts = current_ + segment.rto;
-                    change++;
+                bool needSend() {
+                    if (segment.xmit == 0) {//FirstSend 1. xmit为0，第一次发送，赋值rto及resendts
+                        segment.rto = rx_rto;
+                    } else if (current_ >= segment.resend_ts) {//RtoReSend 触发超时重传 2. 超过segment重发时间，却仍在send_buf中，说明长时间未收到ack，认为丢失，重发
+                        xmit_++;
+                        segment.rto += (rx_rto / 2);//以1.5倍的速度增长(Tcp是两倍增长)
+                        lost = true;
+                    } else if (segment.fastack >= fastresend_) {//FastAckResend 3. 达到快速重传阈值，重新发送
+                        segment.fastack = 0;//发送之前清零之前的统计
+                        change++;
+                    } else {
+                        return false;
+                    }
+                    return true;
                 }
 
-                if (needsend > 0) {
+                if (needSend()) {
+                    segment.resend_ts = current_ + segment.rto;
+                    segment.xmit++;
                     segment.ts = current_;
                     segment.wnd = seg.wnd;
                     segment.una = rcv_nxt;
-
-                    int need = IKCP_OVERHEAD;
-                    if (!segment.Data.IsEmpty)
-                        need += segment.Data.Length;
-
-                    if (offset + need > mtu) {
-                        output_(buffer, offset, user_);
+                    if (offset + segment.LengthAll > mtu) {
+                        output_(buffer.Span.Slice(0, offset), user_);
                         offset = 0;
                     }
-                    segment.Encode(buffer, ref offset);
-                    if (segment.Data.Length > 0) {
-                        Buffer.BlockCopy(segment.Data.ToArray(), 0, buffer, offset, segment.Data.Length);
-                        offset += segment.Data.Length;
-                    }
+                    segment.Encode(buffer.Span.Slice(offset), ref offset);
                     if (segment.xmit >= dead_link_)
                         state = 0xffffffff;
                 }
+
             }
 
-            // flush remain segments
+            // flush remain segments //推送剩余的segment
             if (offset > 0) {
-                output_(buffer, offset, user_);
+                output_(buffer.Span.Slice(0, offset), user_);
                 offset = 0;
             }
 
             // update ssthresh
+            // 如发生快速重传，将拥塞窗口阈值ssthresh调整为当前发送窗口的一半，
+            // 将拥塞窗口调整为 ssthresh + resent，resent是触发快速重传的丢包的次数，
+            // resent的值代表的意思在被弄丢的包后面收到了resent个数的包的ack。
+            // 这样调整后kcp就进入了拥塞控制状态。
             if (change > 0) {
                 uint inflight = snd_nxt - snd_una;
                 ssthresh = inflight / 2;
                 if (ssthresh < IKCP_THRESH_MIN)
                     ssthresh = IKCP_THRESH_MIN;
-                this.cwnd = ssthresh + resent;
+                this.cwnd = ssthresh + fastresend_;//这里加上fastresend_的值是什么意思？
                 incr_ = this.cwnd * mss;
             }
 
-            if (lost > 0) {
+            // update ssthresh
+            // 当出现超时重传的时候，说明网络很可能死掉了，因为超时重传会出现，
+            // 原因是有包丢失了，并且该包之后的包也没有收到，这很有可能是网络死了，
+            // 这时候，拥塞窗口直接变为1。
+            if (lost) {
                 ssthresh = cwnd / 2;
                 if (ssthresh < IKCP_THRESH_MIN)
                     ssthresh = IKCP_THRESH_MIN;

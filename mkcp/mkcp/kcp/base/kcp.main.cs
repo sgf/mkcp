@@ -3,12 +3,17 @@ using System.Collections.Generic;
 using System.Diagnostics;
 
 namespace mkcp {
-    public partial class Kcp {
+    public partial class Kcp : IDisposable {
 
         // create a new kcp control object, 'conv' must equal in two endpoint
         // from the same connection. 'user' will be passed to the output callback
         // output callback can be setup like this: 'kcp->output = my_udp_output'
-        public Kcp(uint conv, object user) {
+        /// <summary>
+        /// 由于构造函数改成了private因此规定：外部必须由Create函数创建Kcp对象，所以构造完后Kcp无法直接实用
+        /// </summary>
+        /// <param name="conv"></param>
+        /// <param name="user"></param>
+        private Kcp(uint conv, object user) {
             Debug.Assert(BitConverter.IsLittleEndian); // we only support little endian device
             user_ = user;
             this.conv = conv;
@@ -23,22 +28,12 @@ namespace mkcp {
             ts_flush_ = IKCP_INTERVAL;
             ssthresh = IKCP_THRESH_INIT;
             dead_link_ = IKCP_DEADLINK;
-            buffer = new byte[(mtu + IKCP_OVERHEAD) * 3];
+            //buffer = new byte[(mtu + IKCP_OVERHEAD) * 3];//改在 SetMtu函数中用内存池分配了
             snd_queue_ = new Queue<Segment>();
             rcv_queue_ = new LinkedList<Segment>();
             snd_buf_ = new LinkedList<Segment>();
             rcv_buf_ = new LinkedList<Segment>();
             ackList = new List<ulong>();
-        }
-
-        // release kcp control object
-        public void Release() {
-            snd_buf_.Clear();
-            rcv_buf_.Clear();
-            snd_queue_.Clear();
-            rcv_queue_.Clear();
-            ackList.Clear();
-            buffer = null;
         }
 
 
@@ -82,7 +77,7 @@ namespace mkcp {
             }
 
             var rto = rx_srtt + _imax_(interval_, (uint)(4 * rx_rttval));
-            rx_rto = (int)_ibound_((uint)rx_minrto, (uint)rto, IKCP_RTO_MAX);
+            rx_rto = _ibound_(rx_minrto, (uint)rto, IKCP_RTO_MAX);
         }
 
         /// <summary>
@@ -104,7 +99,7 @@ namespace mkcp {
         /// </summary>
         /// <param name="sn"></param>
         void ParseACK(uint sn) {
-            if (_itimediff(sn, snd_una) < 0 || _itimediff(sn, snd_nxt) >= 0)
+            if (sn < snd_una || sn >= snd_nxt)
                 return;
 
             LinkedListNode<Segment> next = null;
@@ -115,28 +110,28 @@ namespace mkcp {
                     snd_buf_.Remove(node);
                     break;
                 }
-                if (_itimediff(sn, seg.sn) < 0)
+                if (sn < seg.sn)
                     break;
             }
         }
 
         /// <summary>
         /// 分析una，看哪些segment远端收到了，删除send_buf中小于una的segment
-        ///
-        ///
         /// 调用 ikcp_parse_una 来确定已经发送的数据包有哪些被对方接收到。
+        /// </summary>
+        /// <remarks>
         /// 注意: KCP 中所有的报文类型均带有 una 信息。
         /// 前面介绍过，发送端发送的数据都会缓存在 snd_buf 中，直到接收到对方确认信息之后才会删除。
         /// 当接收到 una 信息后，表明 sn 小于 una 的数据包都已经被对方接收到，因此可以直接从 snd_buf 中删除。
         /// 同时调用 ikcp_shrink_buf 来更新 KCP 控制块的 snd_una 数值。
-        /// </summary>
+        /// </remarks>
         /// <param name="una"></param>
         void ParseUNA(uint una) {
             LinkedListNode<Segment> next = null;
             for (var node = snd_buf_.First; node != null; node = next) {
                 var seg = node.Value;
                 next = node.Next;
-                if (_itimediff(una, seg.sn) > 0) {
+                if (una > seg.sn) {
                     snd_buf_.Remove(node);
                 } else {
                     break;
@@ -145,14 +140,14 @@ namespace mkcp {
         }
 
         void ParseFastACK(uint sn) {
-            if (_itimediff(sn, snd_una) < 0 || _itimediff(sn, snd_nxt) >= 0)
+            if (sn < snd_una || sn >= snd_nxt)
                 return;
 
             LinkedListNode<Segment> next = null;
             for (var node = snd_buf_.First; node != null; node = next) {
                 var seg = node.Value;
                 next = node.Next;
-                if (_itimediff(sn, seg.sn) < 0) {
+                if (sn < seg.sn) {
                     break;
                 } else if (sn != seg.sn) {
                     seg.fastack++;
@@ -165,8 +160,8 @@ namespace mkcp {
             uint sn = newseg.sn;
             int repeat = 0;
 
-            if (_itimediff(sn, rcv_nxt + rcv_wnd) >= 0 ||
-                _itimediff(sn, rcv_nxt) < 0) {
+            if (sn >= rcv_nxt + rcv_wnd ||
+                sn < rcv_nxt) {
                 return;
             }
 
@@ -179,7 +174,7 @@ namespace mkcp {
                     repeat = 1;
                     break;
                 }
-                if (_itimediff(sn, seg.sn) > 0) {
+                if (sn > seg.sn) {
                     break;
                 }
             }
@@ -212,19 +207,6 @@ namespace mkcp {
         }
 
 
-        public int Interval(int interval) {
-            if (interval > 5000)
-                interval = 5000;
-            else if (interval < 10)
-                interval = 10;
-
-            interval_ = (uint)interval;
-            return 0;
-        }
-
-
-
-
         // get how many packet is waiting to be sent
         public int WaitSnd => snd_buf_.Count + snd_queue_.Count;
         // read conv
@@ -235,6 +217,25 @@ namespace mkcp {
 
         void Log(kLog mask, string format, params object[] args) {
             // Console.WriteLine(mask + String.Format(format, args));
+        }
+
+        private bool disposed = false;
+        public void Dispose() {
+
+            if (!disposed) {
+                disposed = true;
+                foreach (var v in snd_buf_) v.Dispose();
+                foreach (var v in rcv_buf_) v.Dispose();
+                foreach (var v in snd_queue_) v.Dispose();
+                foreach (var v in rcv_queue_) v.Dispose();
+                snd_buf_.Clear();
+                rcv_buf_.Clear();
+                snd_queue_.Clear();
+                rcv_queue_.Clear();
+                ackList.Clear();
+                mowner.Dispose();
+            }
+
         }
     }
 }

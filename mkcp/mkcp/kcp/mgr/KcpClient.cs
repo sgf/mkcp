@@ -11,7 +11,7 @@ namespace mkcp {
         private KcpClient(IPEndPoint svrIpPort) {
             KcpSession = KcpSession.CreateClientSession(svrIpPort);
             _sock = KcpSocket.CreateClient(svrIpPort, OnRawReceive);
-            KcpSession.kcp.SetOutput((data, size, user) => {
+            KcpSession.kcp.SetOutput((data, user) => {
                 if (!KcpSession.Closed)
                     _ = _sock.UdpSendToAsync(new Memory<byte>(data, 0, size), KcpSession.Peer);
             });

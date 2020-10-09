@@ -1,10 +1,6 @@
 ﻿using Nito.AsyncEx;
 using System;
-using System.ComponentModel;
-using System.Diagnostics.CodeAnalysis;
-using System.Drawing;
 using System.Net;
-using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -105,10 +101,10 @@ namespace mkcp {
         public void Send(Span<byte> data) {
             if (!Closed) {
                 if (Connected) {
-                    kcp.Send(data, 0, data.Length);
+                    kcp.Send(data);
                 } else if (!Connected && !Connecting) {
                     Connecting = true;
-                    kcp.Send(data, 0, data.Length);
+                    kcp.Send(data);
                 }
             }
         }
