@@ -114,7 +114,6 @@ namespace mkcp {
             return len;
         }
 
-
         // update state (call it repeatedly, every 10ms-100ms), or you can ask
         // ikcp_check when to call it again (without ikcp_input/_send calling).
         // 'current' - current timestamp in millisec.
@@ -390,6 +389,7 @@ namespace mkcp {
                     }
                     return true;
                 }
+           
 
                 if (needSend()) {
                     segment.resend_ts = current_ + segment.rto;
