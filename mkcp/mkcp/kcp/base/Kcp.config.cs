@@ -130,7 +130,7 @@ namespace mkcp {
         /// <summary>
         /// Send函数单次，可以发送的最大数据大小
         /// </summary>
-        /// <remarks>SendMax=255*mss , mss=(mtu-包头)</remarks>
+        /// <remarks> SendMax = 255*mss , mss = (mtu-包头)</remarks>
         public int SendMax => byte.MaxValue * (int)mss;
 
     }
