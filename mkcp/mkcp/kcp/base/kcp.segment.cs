@@ -6,28 +6,43 @@ using System.Runtime.InteropServices;
 [assembly: InternalsVisibleTo("mkcp.xTest")]
 namespace mkcp {
 
+
+    //有个-idea
+    //把包的编号按照顺序分配和排列 其实就是自增,但是他可以是循环的.这将直接决定包的并发量(2个字节最大值ushort6w多实际,如果为游戏设计,考虑到冗余,ack等每秒钟算2w个包,有效载荷470字节每个包)//或者1350字节
+
+    //怎么计算有没有丢包呢? 官方的是现实是:
+    //1.UNA/ACK 如果被跳过X次就认为丢包,立即重发.
+        
+    //这里当然也可以如此.只不过区别是官方使用的是什么?是链表.
+
+    //我这里的思路是使用下标,与此同时. 可以直接以下标的跨度和实际发送出去的数量进行相减
+    //    (从而拿到一个差值,这个差值应该要结合发送时间,来判断是否丢包?可能需要结合这里面有没有ACK,或者以第一个拿到ACK的包开始相减,具体怎么做这里面感觉大有文章可做)
+
+
     public partial class Kcp {
+
+        //基本上10个字节搞定.2+1+2+2+2 
 
         [StructLayout(LayoutKind.Explicit, Pack = 1)]
         internal struct SegmentHead {
-            /// <summary>
-            /// 会话ID 仅仅用于 类似会话通道标记的功能，而不是用来作为SessionId标记（虽然也可以但是太浪费）
-            /// </summary>
+            /// <summary> 会话ID 仅仅用于 类似会话通道标记的功能，而不是用来作为SessionId标记（虽然也可以但是太浪费） </summary>
             [FieldOffset(0)]
             internal uint conv;
             [FieldOffset(4)]
             internal Cmd cmd;
+            /// <summary> message中的segment分片ID（在message中的索引，由大到小，0表示最后一个分片） </summary>
             [FieldOffset(5)]
             internal byte frg;
+            /// <summary> 剩余接收窗口大小(接收窗口大小-接收队列大小) 优化点:只需要告诉一个大概就可以了</summary>
             [FieldOffset(6)]
             internal ushort wnd;
+            /// <summary> message发送时刻的时间戳 </summary>
             [FieldOffset(8)]
             internal uint ts;
+            /// <summary> message分片segment的序号   若为减少分片,则可以规定例如:可以用一个bit表示是否按每1个,10个,100个字节为1个分片精度</summary>
             [FieldOffset(12)]
             internal uint sn;
-            /// <summary>
-            /// ts-sn联合字段 便于存储（缓存ACK信息）
-            /// </summary>
+            /// <summary>ts-sn联合字段 便于存储（缓存ACK信息）</summary>
             [FieldOffset(8)]
             internal ulong tssn;
             [FieldOffset(16)]

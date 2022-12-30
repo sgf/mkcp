@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.29613.14
+# Visual Studio Version 17
+VisualStudioVersion = 17.4.33205.214
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "mkcp", "mkcp\mkcp.csproj", "{2C66F72F-E363-45C7-BE99-578E58377F51}"
 EndProject
@@ -16,9 +16,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ConsoleKcpSvr", "ConsoleApp1\ConsoleKcpSvr.csproj", "{FFF1FFCA-C232-4D93-9DA7-CDFE41389F9D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConsoleKcpClient", "ConsoleKcpClient\ConsoleKcpClient.csproj", "{9860C06A-EB2D-4D0D-8D59-184C3C5AE874}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ConsoleKcpClient", "ConsoleKcpClient\ConsoleKcpClient.csproj", "{9860C06A-EB2D-4D0D-8D59-184C3C5AE874}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConsoleApp2", "ConsoleApp2\ConsoleApp2.csproj", "{6DF0229C-E9EC-4328-B4D4-2BA0A1DA518B}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ConsoleApp2", "ConsoleApp2\ConsoleApp2.csproj", "{6DF0229C-E9EC-4328-B4D4-2BA0A1DA518B}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BitFieldGenerator", "..\BitFieldGenerator\BitFieldGenerator\BitFieldGenerator\BitFieldGenerator.csproj", "{4314BAFB-C829-4D5F-8BB2-78A30600A606}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -50,6 +52,10 @@ Global
 		{6DF0229C-E9EC-4328-B4D4-2BA0A1DA518B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6DF0229C-E9EC-4328-B4D4-2BA0A1DA518B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6DF0229C-E9EC-4328-B4D4-2BA0A1DA518B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4314BAFB-C829-4D5F-8BB2-78A30600A606}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4314BAFB-C829-4D5F-8BB2-78A30600A606}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4314BAFB-C829-4D5F-8BB2-78A30600A606}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4314BAFB-C829-4D5F-8BB2-78A30600A606}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

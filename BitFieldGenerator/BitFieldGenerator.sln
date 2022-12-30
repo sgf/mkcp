@@ -1,0 +1,34 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 14
+VisualStudioVersion = 14.0.25123.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BitFieldGenerator", "BitFieldGenerator\BitFieldGenerator\BitFieldGenerator.csproj", "{DA177EC5-811C-462A-8593-7BC9AAAF409E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BitFieldGenerator.Test", "BitFieldGenerator\BitFieldGenerator.Test\BitFieldGenerator.Test.csproj", "{E7745DEE-2BBF-4FE0-B9E5-3AE6510E6311}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BitFieldGenerator.Vsix", "BitFieldGenerator\BitFieldGenerator.Vsix\BitFieldGenerator.Vsix.csproj", "{70F4F801-ED4F-4401-A214-168D65BF701A}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{DA177EC5-811C-462A-8593-7BC9AAAF409E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DA177EC5-811C-462A-8593-7BC9AAAF409E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DA177EC5-811C-462A-8593-7BC9AAAF409E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DA177EC5-811C-462A-8593-7BC9AAAF409E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E7745DEE-2BBF-4FE0-B9E5-3AE6510E6311}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E7745DEE-2BBF-4FE0-B9E5-3AE6510E6311}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E7745DEE-2BBF-4FE0-B9E5-3AE6510E6311}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E7745DEE-2BBF-4FE0-B9E5-3AE6510E6311}.Release|Any CPU.Build.0 = Release|Any CPU
+		{70F4F801-ED4F-4401-A214-168D65BF701A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{70F4F801-ED4F-4401-A214-168D65BF701A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{70F4F801-ED4F-4401-A214-168D65BF701A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{70F4F801-ED4F-4401-A214-168D65BF701A}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
